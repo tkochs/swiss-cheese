@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "swiss-cheese"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+dependencies = [
+    "pandas>=2.3",
+    "numpy>=2.4",
+    "scipy>=1.16",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
