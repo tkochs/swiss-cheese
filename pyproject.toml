@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [tool.maturin]
-python-source = "swiss_cheese"
+python-source = "."
 
 [project.optional-dependencies]
 dev = [
