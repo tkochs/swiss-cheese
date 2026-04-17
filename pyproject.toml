@@ -19,6 +19,9 @@ dependencies = [
     "scipy>=1.16",
 ]
 
+[tool.maturin]
+python-source = "swiss_cheese"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
