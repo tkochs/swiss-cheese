@@ -1,11 +1,17 @@
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.12,<2.0"]
+build-backend = "maturin"
 
 [project]
-name = "swiss-cheese"
-version = "0.1.0"
-requires-python = ">=3.13"
+name = "swiss_cheese"
+requires-python = ">=3.10"
+
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
 
 dependencies = [
     "pandas>=2.3",
