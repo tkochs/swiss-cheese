@@ -1,6 +1,6 @@
-from swiss_cheese.missing_generators import MCAR, MNAR, MNARParamters
+from swiss_cheese import MCAR, MNAR, MNARParamters, MNARrs
 from sklearn.datasets import make_classification
-from swiss_cheese.missing_generators import max_missing_percentage
+from swiss_cheese.utils import max_missing_percentage
 import numpy as np
 import pandas as pd
 import pytest
@@ -80,34 +80,34 @@ def test_max_percentage():
 
 def test_mnar_min():
     df = data("MNAR")
-    missing = MNAR(MNARParamters(means=[1]))(df, 0.1)
+    missing = MNARrs(mean=1)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(df)
     print(missing)
     print(df.max())
     print(missing < df.max())
-    assert (missing[~missing.isna()].max() < df.max()).all(), "max test"
+    assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
     assert missing.isna().sum().sum() == 5
 
 
 def test_mnar_max():
     df = data("MNAR")
-    missing = MNAR(MNARParamters(means=[0]))(df, 0.1)
+    missing = MNARrs(mean=0)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
     print(missing > df.min())
-    assert (missing[~missing.isna()].min() > df.min()).all(), "min test"
+    assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
     assert missing.isna().sum().sum() == 5
 
 
 def test_mnar_median():
     df = data("MNAR")
-    missing = MNAR(MNARParamters(means=[0.5]))(df, 0.1)
+    missing = MNARrs(mean=0.5)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(df)
     print(missing)
-    # print(df.quantile(0.5))
+    print(df.quantile(0.5))
     print(missing.iloc[4, 2])
     assert np.isnan(missing.iloc[4, :]).all(), "median test"
     assert missing.isna().sum().sum() == 5
@@ -115,7 +115,7 @@ def test_mnar_median():
 
 def test_mnar_var():
     df = data("MNAR")
-    missing = MNAR(MNARParamters(means=[0], variances=[1]))(df, 0.1)
+    missing = MNARrs(0, 1)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
@@ -125,19 +125,31 @@ def test_mnar_var():
 
 def test_mnar_alpha():
     df = data()
-    missing = MNAR(MNARParamters())(df, 0.1)
+    missing = MNARrs()(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
 
-    missing = MNAR(MNARParamters())(df, 0.2)
+    missing = MNARrs()(df, 0.2)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 10
 
-    missing = MNAR(MNARParamters())(df, 0.15)
+    missing = MNARrs()(df, 0.15)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 8
     assert not df.isna().any().any(), "introduced missing in original data"
 
+def test_mnarrs():
+    df = data()
+    missing = MNAR(MNARParamters())(df, 0.1)
+    print(missing)
+    print(df.min())
+    assert missing.isna().sum().sum() == 5
+
+    df = data()
+    missing = MNARrs(mean=0.5)(df, 0.1)
+    print(missing)
+    print(df.min())
+    assert missing.isna().sum().sum() == 5

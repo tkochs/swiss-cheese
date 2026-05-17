@@ -9,4 +9,8 @@ name = "swiss_cheese"
 crate-type = ["cdylib"]
 
 [dependencies]
+ndarray = "0.17.2"
+ndarray-stats = "0.7.0"
+numpy = "0.28.0"
 pyo3 = "0.28.0"
+rand = "0.10.1"
