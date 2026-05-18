@@ -1,5 +1,4 @@
 from swiss_cheese import MCAR, MNAR, MNARParamters, MNARrs
-from sklearn.datasets import make_classification
 from swiss_cheese.utils import max_missing_percentage
 import numpy as np
 import pandas as pd
@@ -7,7 +6,7 @@ import pytest
 import time
 
 
-def data(kind="MCAR"):
+def data(kind:str="MCAR"):
     rng = np.random.default_rng()
     match kind:
         case "MCAR":
@@ -155,17 +154,58 @@ def test_mnarrs():
     print(df.min())
     assert missing.isna().sum().sum() == 5
 
+def test_rs_str():
+    df = data("WithStr")
+    missing = MNAR(MNARParamters())(df, 0.1)
+    print(missing)
+    print(df.min())
+    assert missing.isna().sum().sum() == 5
+
+    print(df.dtypes)
+    df = data("WithStr")
+    missing = MNARrs(mean=0.5)(df, 0.1)
+    print(missing)
+    print(df.min())
+    assert missing.isna().sum().sum() == 5
+
 
 def test_time():
     arr = np.random.rand(500, 5)
     df = pd.DataFrame(arr)
     print(df)
     start = time.time()
-    _ = MNAR(MNARParamters())(df, 0.1)
+    _ = MNAR(MNARParamters())(df, 0.5)
     total_py = time.time() - start 
     
     start = time.time()
-    _ = MNARrs()(df, 0.1)
+    _ = MNARrs()(df, 0.5)
     total_rs = time.time() - start 
 
-    assert total_rs < total_py, "not faster :( \nrs:{total_rs}, py:{total_py}"
+    assert total_rs <  1 * total_py, "not faster :( \nrs:{total_rs}, py:{total_py}"
+
+def test_rs_stable():
+    df = data()
+    missing = MNARrs()(df, 0.1)
+    print(df)
+    print(missing)
+    print(df.min())
+    mm = missing.isna()
+
+    pd.testing.assert_series_equal(
+        df[~mm].stack(),
+        missing[~mm].stack(),
+        check_names=False,
+    )
+
+    df = data("WithStr")
+    missing = MNARrs()(df, 0.1)
+    print(df)
+    print(missing)
+    print(df.min())
+    mm = missing.isna()
+
+    pd.testing.assert_series_equal(
+        df[~mm].stack(),
+        missing[~mm].stack(),
+        check_names=False,
+    )

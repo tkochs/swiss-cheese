@@ -3,10 +3,9 @@ import numpy as np
 import pandas as pd
 from enum import Enum
 from .utils import max_missing_percentage, frequency_encode, Gauss
-RANDOM_SEED = None
 
 class MCAR:
-    def __init__(self, random_seed=RANDOM_SEED):
+    def __init__(self, random_seed=None):
         self.seed = random_seed
 
     def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame:
