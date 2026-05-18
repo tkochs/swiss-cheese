@@ -4,6 +4,7 @@ from swiss_cheese.utils import max_missing_percentage
 import numpy as np
 import pandas as pd
 import pytest
+import time
 
 
 def data(kind="MCAR"):
@@ -153,3 +154,18 @@ def test_mnarrs():
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
+
+
+def test_time():
+    arr = np.random.rand(500, 5)
+    df = pd.DataFrame(arr)
+    print(df)
+    start = time.time()
+    _ = MNAR(MNARParamters())(df, 0.1)
+    total_py = time.time() - start 
+    
+    start = time.time()
+    _ = MNARrs()(df, 0.1)
+    total_rs = time.time() - start 
+
+    assert total_rs < total_py, "not faster :( \nrs:{total_rs}, py:{total_py}"

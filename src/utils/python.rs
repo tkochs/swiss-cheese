@@ -45,7 +45,16 @@ pub fn pyany_to_vec(
     if obj.is_instance(&pandas.getattr("DataFrame")?)? {
         let shape: Vec<usize> = obj.getattr("shape")?.extract()?;
         let (nrows, ncols) = (shape[0], shape[1]);
-        let columns: Vec<String> = obj.getattr("columns")?.extract()?;
+        let columns: Vec<String> = obj
+            .getattr("columns")?
+            .try_iter()?
+            .map(|item| {
+                item.expect("no items found!")
+                    .str()
+                    .expect("Failed str conversion")
+                    .to_string()
+            })
+            .collect();
 
         let kwargs = PyDict::new(py);
         kwargs.set_item("dtype", "float64")?;
