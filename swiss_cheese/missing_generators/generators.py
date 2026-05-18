@@ -3,10 +3,9 @@ import numpy as np
 import pandas as pd
 from enum import Enum
 from .utils import max_missing_percentage, frequency_encode, Gauss
-RANDOM_SEED = 42
 
 class MCAR:
-    def __init__(self, random_seed=RANDOM_SEED):
+    def __init__(self, random_seed=None):
         self.seed = random_seed
 
     def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame:
@@ -40,20 +39,18 @@ class MCAR:
 
 @dataclass
 class MNARParamters:
-    means: None | list[float] = None
-    variances: None | list[float] = None
-    weights: None | list[float] = None
+    means: None | float = None
+    variances: None | float = None
+    # weights: None | list[float] = None
     randomize: bool = False
 
     def __post_init__(self):
         if self.means is None:
-            self.means = [0.5] if not self.randomize else list(
-                np.random.rand(1))
+            self.means = 0.5 if not self.randomize else float(np.random.rand(1))
         if self.variances is None:
-            self.variances = [0] if not self.randomize else list(
-                np.random.rand(1))
-        if self.weights is None:
-            self.weights = [1 / len(self.means)]
+            self.variances = 0 if not self.randomize else float(np.random.rand(1))
+        # if self.weights is None:
+        #     self.weights = [1 / len(self.means)]
 
 
 class MnarType(Enum):
@@ -112,8 +109,8 @@ class MNAR:
         total_steps = n_missing / step
         i = 0
 
-        quantiles = df.quantile(self.params.means[0])
-        variances = self.params.variances[0] * (df.max() - df.min())
+        quantiles = df.quantile(self.params.means)
+        variances = self.params.variances * (df.max() - df.min())
         gaussians = Gauss(quantiles, variances, self.seed)
         while df.isna().sum().sum() / n < alpha:
             drop(df, gaussians, n_features(df, alpha))
