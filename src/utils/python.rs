@@ -1,5 +1,5 @@
 use ndarray::Array2;
-use numpy::{IntoPyArray, PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
+use numpy::{PyReadonlyArray2, PyUntypedArrayMethods, ToPyArray};
 use pyo3::buffer::PyBuffer;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyString};
@@ -14,7 +14,7 @@ pub enum OUT {
 #[derive(Debug)]
 pub struct EncodingInfo {
     pub string_column_indices: Vec<usize>,
-    pub label_maps: HashMap<usize, HashMap<String, u64>>,
+    pub _label_maps: HashMap<usize, HashMap<String, u64>>,
     pub reverse_maps: HashMap<usize, HashMap<u64, String>>,
 }
 
@@ -199,7 +199,7 @@ fn encode_object_array(
         data,
         EncodingInfo {
             string_column_indices,
-            label_maps,
+            _label_maps: label_maps,
             reverse_maps,
         },
     )
@@ -257,7 +257,7 @@ fn encode_dataframe(
         data,
         EncodingInfo {
             string_column_indices,
-            label_maps,
+            _label_maps: label_maps,
             reverse_maps,
         },
     ))

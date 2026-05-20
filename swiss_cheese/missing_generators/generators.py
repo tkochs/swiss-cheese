@@ -1,12 +1,15 @@
 from dataclasses import dataclass
+from typing import override
+from warnings import deprecated
 import numpy as np
 import pandas as pd
 from enum import Enum
 from .utils import max_missing_percentage, frequency_encode, Gauss
 
+
 class MCAR:
-    def __init__(self, random_seed=None):
-        self.seed = random_seed
+    def __init__(self, random_seed: None | int = None):
+        self.seed: int | None = random_seed
 
     def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame:
         n = df.size
@@ -36,6 +39,10 @@ class MCAR:
         df[mask.astype(bool)] = pd.NA
         return df
 
+    @override
+    def __repr__(self):
+        return "MCAR"
+
 
 @dataclass
 class MNARParamters:
@@ -46,9 +53,11 @@ class MNARParamters:
 
     def __post_init__(self):
         if self.means is None:
-            self.means = 0.5 if not self.randomize else float(np.random.rand(1))
+            self.means = 0.5 if not self.randomize else float(
+                np.random.rand(1))
         if self.variances is None:
-            self.variances = 0 if not self.randomize else float(np.random.rand(1))
+            self.variances = 0 if not self.randomize else float(
+                np.random.rand(1))
         # if self.weights is None:
         #     self.weights = [1 / len(self.means)]
 
@@ -57,16 +66,17 @@ class MnarType(Enum):
     MoG = "Mixture-of-Gaussians"
 
 
+@deprecated("Use MNARrs (Rust backend)")
 class MNAR:
     def __init__(
         self,
         params: MNARParamters,
         mnar_type: MnarType = MnarType.MoG,
-        random_seed=None,
+        random_seed: int | None = None,
     ):
-        self.mnar_type = mnar_type
-        self.params = params
-        self.seed = random_seed
+        self.mnar_type: MnarType = mnar_type
+        self.params: MNARParamters = params
+        self.seed: int | None = random_seed
 
     def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame:
         match self.mnar_type:
