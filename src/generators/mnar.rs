@@ -69,26 +69,21 @@ impl MNAR {
         let mut missing_count = 0;
         let distributions = get_distribution(self.mean, self.variance, &arr);
         while missing_count < n_missing {
-            let cols = select_cols(&mut self.rng, &arr, missing_count, n_missing);
+            let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
             self.drop_cols(arr, &distributions, &cols);
             missing_count += cols.len();
+            println!("{:?}", arr);
         }
     }
 
-    fn drop_cols(
-        &mut self,
-        // rng: &mut StdRng,
-        arr: &mut Arc<Array2<f64>>,
-        distributions: &[Gauss],
-        cols: &[usize],
-    ) {
+    fn drop_cols(&mut self, arr: &mut Arc<Array2<f64>>, distributions: &[Gauss], cols: &[usize]) {
         let (transmitter, receiver) = channel();
         let samples: Vec<f64> = cols
             .iter()
             .map(|&c| distributions[c].sample(&mut self.rng))
             .collect();
-        println!("{:?}", &cols);
         for (&c, &s) in cols.iter().zip(&samples) {
+            assert!(!s.is_nan(), "Sample is nan");
             let transmitter = transmitter.clone();
             let _arr = Arc::clone(&arr);
             self.pool.execute(move || {
@@ -102,15 +97,15 @@ impl MNAR {
                     })
                     .expect("No argmin found!")
                     .0;
-                transmitter.send(i).unwrap();
+                transmitter.send((i, c)).unwrap();
             });
         }
         drop(transmitter);
         self.pool.join();
         let indices: Vec<_> = receiver.iter().collect();
         let arr = Arc::get_mut(arr).expect("Still references alive");
-        for (&c, i) in cols.iter().zip(indices) {
-            arr[(i, c)] = f64::NAN;
+        for (r, c) in indices {
+            arr[(r, c)] = f64::NAN;
         }
     }
 }
@@ -187,8 +182,8 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MNAR::new(None, None, None);
-        let _ = MNAR::new(Some(0.5), Some(1.0), None);
+        let _ = MNAR::new(None, None, None, None);
+        let _ = MNAR::new(Some(0.5), Some(1.0), None, None);
     }
 
     #[test]
