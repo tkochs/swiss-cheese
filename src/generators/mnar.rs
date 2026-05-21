@@ -72,7 +72,6 @@ impl MNAR {
             let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
             self.drop_cols(arr, &distributions, &cols);
             missing_count += cols.len();
-            println!("{:?}", arr);
         }
     }
 
