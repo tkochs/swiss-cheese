@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "swiss_cheese"
 description = "Missing Value generation library for research purposes."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 classifiers = [
     "Programming Language :: Rust",
@@ -19,6 +19,7 @@ dependencies = [
     "pandas>=2.3",
     "numpy>=2.4",
     "scipy>=1.16",
+    "maturin>=1.13.3",
 ]
 
 [tool.maturin]

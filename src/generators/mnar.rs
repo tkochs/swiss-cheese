@@ -123,16 +123,13 @@ struct Gauss {
 
 impl Gauss {
     fn new(mean: f64, var: f64) -> Gauss {
-        // let rng = std::cell::RefCell::new(StdRng::seed_from_u64(seed));
         Gauss { mean, var }
     }
 
     fn sample(&self, rng: &mut StdRng) -> f64 {
-        let mut a: f64 = rng.random();
+        let a: f64 = rng.random();
         // avoid 0
-        while a.abs() < 1e-17 {
-            a = rng.random();
-        }
+        let a = a + f64::MIN;
         let b: f64 = rng.random();
         // Box-Muller transform
         let z = f64::sqrt(-2.0 * a.ln()) * f64::cos(2.0 * std::f64::consts::PI * b);
