@@ -3,19 +3,27 @@ use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
 use pyo3::prelude::*;
 use rand::prelude::*;
+use std::sync::{Arc, mpsc::channel};
+use threadpool::ThreadPool;
 
-#[pyclass]
+#[pyclass(name = "MNARrs")]
 pub struct MNAR {
     mean: f64,
     variance: f64,
     rng: StdRng,
+    pool: ThreadPool,
 }
 
 #[pymethods]
 impl MNAR {
     #[new]
-    #[pyo3(signature = (mean= None,variance=None, seed=None))]
-    fn new(mean: Option<f64>, variance: Option<f64>, seed: Option<u64>) -> MNAR {
+    #[pyo3(signature = (mean= None, variance=None, seed=None, n_workers=None))]
+    fn new(
+        mean: Option<f64>,
+        variance: Option<f64>,
+        seed: Option<u64>,
+        n_workers: Option<usize>,
+    ) -> MNAR {
         let mean = mean.unwrap_or(0.5);
         let variance = variance.unwrap_or(0.0);
         let seed = seed.unwrap_or(
@@ -25,10 +33,12 @@ impl MNAR {
                 .as_nanos() as u64,
         );
         let rng = StdRng::seed_from_u64(seed);
+        let pool = ThreadPool::new(n_workers.unwrap_or(4));
         MNAR {
             mean,
             variance,
             rng,
+            pool,
         }
     }
 
@@ -41,38 +51,62 @@ impl MNAR {
         let ((vec, nrows, ncols), out, enc_info) =
             pyany_to_vec(py, data, Some(StringEncoding::LabelEncoding))?;
         utils::fix();
-        let mut array = ndarray::Array2::from_shape_vec((nrows, ncols), vec)
+        let array = ndarray::Array2::from_shape_vec((nrows, ncols), vec)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-        self.drop(&mut array, alpha);
-        arr_to_out(py, &array, out, enc_info)
+        let mut arr = Arc::new(array);
+        self.drop(&mut arr, alpha);
+        arr_to_out(py, &arr, out, enc_info)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("MNAR[{}]", self.mean)
     }
 }
 
 impl MNAR {
-    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) {
+    fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
         let distributions = get_distribution(self.mean, self.variance, &arr);
         while missing_count < n_missing {
-            let cols = select_cols(&mut self.rng, &arr, missing_count, n_missing);
-            drop_cols(&mut self.rng, arr, &distributions, &cols);
+            let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
+            self.drop_cols(arr, &distributions, &cols);
             missing_count += cols.len();
+            println!("{:?}", arr);
         }
     }
-}
 
-fn drop_cols(rng: &mut StdRng, arr: &mut Array2<f64>, distributions: &[Gauss], cols: &[usize]) {
-    for &c in cols {
-        let s = distributions[c].sample(rng);
-        let i = arr
-            .column(c)
+    fn drop_cols(&mut self, arr: &mut Arc<Array2<f64>>, distributions: &[Gauss], cols: &[usize]) {
+        let (transmitter, receiver) = channel();
+        let samples: Vec<f64> = cols
             .iter()
-            .enumerate()
-            .filter(|(_, v)| !v.is_nan())
-            .min_by(|(_, a), (_, b)| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))))
-            .expect("No argmin found!")
-            .0;
-        arr[(i, c)] = f64::NAN;
+            .map(|&c| distributions[c].sample(&mut self.rng))
+            .collect();
+        for (&c, &s) in cols.iter().zip(&samples) {
+            assert!(!s.is_nan(), "Sample is nan");
+            let transmitter = transmitter.clone();
+            let _arr = Arc::clone(&arr);
+            self.pool.execute(move || {
+                let i = _arr
+                    .column(c)
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, v)| !v.is_nan())
+                    .min_by(|(_, a), (_, b)| {
+                        ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
+                    })
+                    .expect("No argmin found!")
+                    .0;
+                transmitter.send((i, c)).unwrap();
+            });
+        }
+        drop(transmitter);
+        self.pool.join();
+        let indices: Vec<_> = receiver.iter().collect();
+        let arr = Arc::get_mut(arr).expect("Still references alive");
+        for (r, c) in indices {
+            arr[(r, c)] = f64::NAN;
+        }
     }
 }
 
@@ -145,8 +179,8 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MNAR::new(None, None, None);
-        let _ = MNAR::new(Some(0.5), Some(1.0), None);
+        let _ = MNAR::new(None, None, None, None);
+        let _ = MNAR::new(Some(0.5), Some(1.0), None, None);
     }
 
     #[test]

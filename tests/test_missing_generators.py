@@ -6,7 +6,7 @@ import pytest
 import time
 
 
-def data(kind:str="MCAR"):
+def data(kind: str = "MCAR"):
     rng = np.random.default_rng()
     match kind:
         case "MCAR":
@@ -141,6 +141,7 @@ def test_mnar_alpha():
     assert missing.isna().sum().sum() == 8
     assert not df.isna().any().any(), "introduced missing in original data"
 
+
 def test_mnarrs():
     df = data()
     missing = MNAR(MNARParamters())(df, 0.1)
@@ -153,6 +154,7 @@ def test_mnarrs():
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
+
 
 def test_rs_str():
     df = data("WithStr")
@@ -175,13 +177,15 @@ def test_time():
     print(df)
     start = time.time()
     _ = MNAR(MNARParamters())(df, 0.5)
-    total_py = time.time() - start 
-    
-    start = time.time()
-    _ = MNARrs()(df, 0.5)
-    total_rs = time.time() - start 
+    total_py = time.time() - start
 
-    assert total_rs <  1 * total_py, "not faster :( \nrs:{total_rs}, py:{total_py}"
+    start = time.time()
+    _ = MNARrs(n_workers=10)(df, 0.5)
+    total_rs = time.time() - start
+
+    assert total_rs < 1 * \
+        total_py, "not faster :( \nrs:{total_rs}, py:{total_py}"
+
 
 def test_rs_stable():
     df = data()
