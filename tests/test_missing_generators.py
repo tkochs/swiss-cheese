@@ -213,3 +213,23 @@ def test_rs_stable():
         missing[~mm].stack(),
         check_names=False,
     )
+
+def test_mnar_max_det():
+    df = data("MNAR")
+    missing = MNARrs(mode="max")(df, 0.1)
+    assert not df.isna().any().any(), "introduced missing in original data"
+    print(missing)
+    print(df.min())
+    print(missing > df.min())
+    assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
+    assert missing.isna().sum().sum() == 5
+
+def test_mnar_min_det():
+    df = data("MNAR")
+    missing = MNARrs(mode="min")(df, 0.1)
+    assert not df.isna().any().any(), "introduced missing in original data"
+    print(missing)
+    print(df.min())
+    print(missing > df.min())
+    assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
+    assert missing.isna().sum().sum() == 5
