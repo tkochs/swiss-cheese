@@ -12,9 +12,9 @@ Focuses on tabular data.
   Sets $\alpha$ percentage of values missing by sampling from a normal distribution and matching to the nearest data value.
   Currently $3$ modes are supported:
   #### Min
-    Removes the minimum value of each feature until desired $\alpha$ has been achieved.
+  Removes the minimum value of each feature until desired $\alpha$ has been achieved.
   #### Max
-    Removes the maximum value of each feature until desired $\alpha$ has been achieved.
+  Removes the maximum value of each feature until desired $\alpha$ has been achieved.
   #### Gaussian Missing (GM)
-    Samples from a gaussian (mean, var given as parameter) and romves closest value.
+  Samples from a gaussian (mean, var given as parameter) and romves closest value.
   
