@@ -1,6 +1,7 @@
 use super::utils;
 use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
+use ndarray_stats::CorrelationExt;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use rand::prelude::*;
@@ -54,26 +55,19 @@ impl MAR {
 
 impl MAR {
     fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
-        let n_miss = (arr.ncols() as f64 * self.ratio).round() as usize;
-        let n_obs = arr.ncols() - n_miss;
-
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
+        let available = self.pairs(arr);
         let mut missing_count = 0;
         while missing_count < n_missing {
-            let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
+            let cols = select_cols(&mut self.rng, arr, missing_count, n_missing, &available);
             missing_count += cols.len();
             println!("{:?}", arr);
         }
     }
 
-    fn drop_cols(&mut self, arr: &mut Arc<Array2<f64>>, distributions: &[Gauss], cols: &[usize]) {
+    fn drop_cols(&mut self, arr: &mut Arc<Array2<f64>>, cols: &[usize]) {
         let (transmitter, receiver) = channel();
-        let samples: Vec<f64> = cols
-            .iter()
-            .map(|&c| distributions[c].sample(&mut self.rng))
-            .collect();
-        for (&c, &s) in cols.iter().zip(&samples) {
-            assert!(!s.is_nan(), "Sample is nan");
+        for &c in cols {
             let transmitter = transmitter.clone();
             let _arr = Arc::clone(&arr);
             self.pool.execute(move || {
@@ -82,9 +76,7 @@ impl MAR {
                     .iter()
                     .enumerate()
                     .filter(|(_, v)| !v.is_nan())
-                    .min_by(|(_, a), (_, b)| {
-                        ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
-                    })
+                    .min_by(|(_, a), (_, b)| (*a).total_cmp(b))
                     .expect("No argmin found!")
                     .0;
                 transmitter.send((i, c)).unwrap();
@@ -98,9 +90,26 @@ impl MAR {
             arr[(r, c)] = f64::NAN;
         }
     }
+
+    fn pairs(&mut self, arr: &Arc<Array2<f64>>) -> Vec<(usize, usize)> {
+        let (miss_cols, obs_cols): (Vec<_>, Vec<_>) =
+            (0..arr.ncols()).partition(|_| self.rng.random_bool(self.ratio));
+        let correlations = arr
+            .t()
+            .pearson_correlation()
+            .expect("Failed to calculate pearson_correlation");
+        let pair = miss_cols.iter().map(|c| correlations.column(*c));
+        Vec::new()
+    }
 }
 
-fn select_cols(rng: &mut StdRng, arr: &Array2<f64>, count: usize, n_missing: usize) -> Vec<usize> {
+fn select_cols(
+    rng: &mut StdRng,
+    arr: &Array2<f64>,
+    count: usize,
+    n_missing: usize,
+    available: &[(usize, usize)],
+) -> Vec<usize> {
     let ncols = arr.ncols();
     if n_missing - count >= ncols {
         return (0..ncols).collect();
@@ -116,5 +125,17 @@ mod test {
     fn create() {
         let _ = MAR::new(None, None, None);
         let _ = MAR::new(Some(0.5), Some(1), None);
+    }
+    #[test]
+    fn correlations() {
+        // 4 samples (rows), 2 variables (columns)
+        let data = Array2::from_shape_vec((4, 2), vec![1.0, 10.0, 2.0, 20.0, 3.0, 30.0, 4.0, 40.0])
+            .unwrap();
+        let corr_no_t = data.pearson_correlation().unwrap();
+        let corr_t = data.t().pearson_correlation().unwrap();
+        println!("Without .t(): {:?}", corr_no_t);
+        println!("With .t(): {:?}", corr_t);
+        assert!(corr_t.ncols() == 2 && corr_t.nrows() == 2);
+        assert!(corr_no_t.ncols() == 4 && corr_no_t.nrows() == 4);
     }
 }
