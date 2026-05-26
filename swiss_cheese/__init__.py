@@ -1,8 +1,8 @@
-from swiss_cheese.swiss_cheese import MNARrs
+from swiss_cheese.swiss_cheese import MNARrs, MAR
 from swiss_cheese.missing_generators import MNAR, MCAR, MNARParamters
 from swiss_cheese.missing_generators import utils
 
 import sys
 sys.modules[__name__ + ".utils"] = utils
 
-__all__ = ["MNAR", "MNARrs", "MCAR", "MNARParamters", "utils"]
+__all__ = ["MNAR", "MNARrs", "MCAR", "MNARParamters", "utils", "MAR"]

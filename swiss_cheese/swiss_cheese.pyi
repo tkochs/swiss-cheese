@@ -41,3 +41,14 @@ class MNARrs:
         ...
 
     def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame: ...
+
+
+class MAR:
+    def __init__(
+        self,
+        seed: uint64 | None = None,
+        n_workers: uint64 | None = None,
+    ) -> None:
+        ...
+
+    def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame: ...
