@@ -150,8 +150,8 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MAR::new(None, None, None);
-        let _ = MAR::new(Some(0.5), Some(1), None);
+        let _ = MAR::new(None, None);
+        let _ = MAR::new(Some(5), Some(1));
     }
     #[test]
     fn correlations() {

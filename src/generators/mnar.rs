@@ -1,4 +1,4 @@
-use super::utils;
+use super::utils::{Gauss, fix};
 use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
 use pyo3::prelude::*;
@@ -50,7 +50,7 @@ impl MNAR {
     ) -> PyResult<Bound<'py, PyAny>> {
         let ((vec, nrows, ncols), out, enc_info) =
             pyany_to_vec(py, data, Some(StringEncoding::LabelEncoding))?;
-        utils::fix();
+        fix();
         let array = ndarray::Array2::from_shape_vec((nrows, ncols), vec)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         let mut arr = Arc::new(array);
@@ -150,30 +150,6 @@ fn transform(
     )
 }
 
-struct Gauss {
-    mean: f64,
-    var: f64,
-}
-
-impl Gauss {
-    fn new(mean: f64, var: f64) -> Gauss {
-        // let rng = std::cell::RefCell::new(StdRng::seed_from_u64(seed));
-        Gauss { mean, var }
-    }
-
-    fn sample(&self, rng: &mut StdRng) -> f64 {
-        let mut a: f64 = rng.random();
-        // avoid 0
-        while a.abs() < 1e-17 {
-            a = rng.random();
-        }
-        let b: f64 = rng.random();
-        // Box-Muller transform
-        let z = f64::sqrt(-2.0 * a.ln()) * f64::cos(2.0 * std::f64::consts::PI * b);
-        self.mean + self.var * z
-    }
-}
-
 #[cfg(test)]
 mod test {
     use crate::generators::mnar::transform;
@@ -209,40 +185,5 @@ mod test {
         let (mean, var) = transform(&mut buff, v.iter().copied(), 1.0, 0.0);
         assert!((mean - 9.0).abs() < 1e-17, "Actual Mean: {mean}");
         assert!((var - 0.0).abs() < 1e-17, "Actual Var: {var}");
-    }
-
-    #[test]
-    fn gaussian_stats() {
-        let mut rng = StdRng::seed_from_u64(43);
-        let expected_mean = 2.0;
-        let expected_stddev = 1.5;
-
-        let g = Gauss::new(expected_mean, expected_stddev);
-
-        let n = 100_000;
-
-        let mut samples = Vec::with_capacity(n);
-
-        for _ in 0..n {
-            samples.push(g.sample(&mut rng));
-        }
-        let mean = samples.iter().sum::<f64>() / n as f64;
-        let variance = samples
-            .iter()
-            .map(|x| {
-                let d = x - mean;
-                d * d
-            })
-            .sum::<f64>()
-            / n as f64;
-
-        let stddev = variance.sqrt();
-        let tolerance = 0.15;
-        assert!((mean - expected_mean).abs() < tolerance, "mean = {}", mean);
-        assert!(
-            (stddev - expected_stddev).abs() < tolerance,
-            "stddev = {}",
-            stddev
-        );
     }
 }
