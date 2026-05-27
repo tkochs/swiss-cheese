@@ -10,6 +10,7 @@ use threadpool::ThreadPool;
 
 #[pyclass(name = "MAR")]
 pub struct MAR {
+    max_missing_per_column: f64,
     rng: StdRng,
     pool: ThreadPool,
 }
@@ -17,17 +18,17 @@ pub struct MAR {
 #[pymethods]
 impl MAR {
     #[new]
-    #[pyo3(signature = (seed=None, n_workers=None))]
-    fn new(seed: Option<u64>, n_workers: Option<usize>) -> MAR {
-        let seed = seed.unwrap_or(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Getting time failed")
-                .as_nanos() as u64,
-        );
+    #[pyo3(signature = (max_missing_per_column=0.8, seed=None, n_workers=None))]
+    fn new(max_missing_per_column: f64, seed: Option<u64>, n_workers: Option<usize>) -> MAR {
+        let mut r = rand::rng();
+        let seed = seed.unwrap_or(r.random());
         let rng = StdRng::seed_from_u64(seed);
-        let pool = ThreadPool::new(n_workers.unwrap_or(4));
-        MAR { rng, pool }
+        let pool = ThreadPool::new(n_workers.unwrap_or(utils::N_WORKERS));
+        MAR {
+            max_missing_per_column,
+            rng,
+            pool,
+        }
     }
 
     fn __call__<'py>(

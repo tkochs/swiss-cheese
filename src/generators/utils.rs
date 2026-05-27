@@ -1,5 +1,7 @@
 use rand::prelude::*;
 
+pub const N_WORKERS: usize = 5;
+
 pub struct Gauss {
     mean: f64,
     var: f64,
@@ -24,7 +26,8 @@ impl Gauss {
     }
 }
 pub fn fix() {
-    // println!("TODO: implement");
+    // "TODO: implement";
+    // Fixes on value per row, that way every datapoint has at least one observed feature
 }
 
 #[cfg(test)]
