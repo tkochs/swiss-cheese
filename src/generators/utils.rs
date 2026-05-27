@@ -1,7 +1,5 @@
 use rand::prelude::*;
 
-pub const N_WORKERS: usize = 5;
-
 pub struct Gauss {
     mean: f64,
     var: f64,

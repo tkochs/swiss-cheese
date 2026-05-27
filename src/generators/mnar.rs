@@ -1,4 +1,7 @@
-use super::utils::{Gauss, fix};
+use super::{
+    constants,
+    utils::{Gauss, fix},
+};
 use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
 use pyo3::prelude::*;
@@ -33,8 +36,8 @@ impl MNAR {
         seed: Option<u64>,
         n_workers: Option<usize>,
     ) -> MNAR {
-        let mean = mean.unwrap_or(0.5);
-        let variance = variance.unwrap_or(0.0);
+        let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
+        let variance = variance.unwrap_or(constants::DEFAULT_VAR);
         let seed = seed.unwrap_or(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -54,7 +57,7 @@ impl MNAR {
         };
 
         let rng = StdRng::seed_from_u64(seed);
-        let pool = ThreadPool::new(n_workers.unwrap_or(4));
+        let pool = ThreadPool::new(n_workers.unwrap_or(constants::N_WORKERS));
         MNAR {
             mean,
             variance,

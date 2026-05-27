@@ -1,4 +1,4 @@
-use super::utils;
+use super::{constants, utils};
 use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
 use ndarray_stats::CorrelationExt;
@@ -18,12 +18,12 @@ pub struct MAR {
 #[pymethods]
 impl MAR {
     #[new]
-    #[pyo3(signature = (max_missing_per_column=0.8, seed=None, n_workers=None))]
+    #[pyo3(signature = (max_missing_per_column=constants::MAX_MISSING_PER_COLUMN, seed=None, n_workers=None))]
     fn new(max_missing_per_column: f64, seed: Option<u64>, n_workers: Option<usize>) -> MAR {
         let mut r = rand::rng();
         let seed = seed.unwrap_or(r.random());
         let rng = StdRng::seed_from_u64(seed);
-        let pool = ThreadPool::new(n_workers.unwrap_or(utils::N_WORKERS));
+        let pool = ThreadPool::new(n_workers.unwrap_or(constants::N_WORKERS));
         MAR {
             max_missing_per_column,
             rng,
@@ -151,8 +151,8 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MAR::new(0.8, None, None);
-        let _ = MAR::new(0.8, Some(5), Some(1));
+        let _ = MAR::new(constants::MAX_MISSING_PER_COLUMN, None, None);
+        let _ = MAR::new(constants::MAX_MISSING_PER_COLUMN, Some(5), Some(1));
     }
     #[test]
     fn correlations() {
