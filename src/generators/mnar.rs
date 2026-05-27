@@ -10,17 +10,26 @@ use threadpool::ThreadPool;
 pub struct MNAR {
     mean: f64,
     variance: f64,
+    mode: Mode,
     rng: StdRng,
     pool: ThreadPool,
 }
 
+enum Mode {
+    GM,
+    MAX,
+    MIN,
+}
+const ALLOWED_MODES: &[&str] = &["GM", "MAX", "MIN"];
+
 #[pymethods]
 impl MNAR {
     #[new]
-    #[pyo3(signature = (mean= None, variance=None, seed=None, n_workers=None))]
+    #[pyo3(signature = (mean= None, variance=None, mode="GM", seed=None, n_workers=None))]
     fn new(
         mean: Option<f64>,
         variance: Option<f64>,
+        mode: &str,
         seed: Option<u64>,
         n_workers: Option<usize>,
     ) -> MNAR {
@@ -32,11 +41,24 @@ impl MNAR {
                 .expect("Getting time failed")
                 .as_nanos() as u64,
         );
+        let mode = match mode.to_lowercase().as_str() {
+            "gm" => Mode::GM,
+            "max" => Mode::MAX,
+            "min" => Mode::MIN,
+            _ => {
+                panic!(
+                    "Unknown mode parameter: {} (Alloed: {:?})",
+                    mode, ALLOWED_MODES
+                )
+            }
+        };
+
         let rng = StdRng::seed_from_u64(seed);
         let pool = ThreadPool::new(n_workers.unwrap_or(4));
         MNAR {
             mean,
             variance,
+            mode,
             rng,
             pool,
         }
@@ -68,15 +90,26 @@ impl MNAR {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
         let distributions = get_distribution(self.mean, self.variance, &arr);
+        let cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering = match self.mode {
+            Mode::MAX => |a, b, _| a.total_cmp(b),
+            Mode::MIN => |a, b, _| b.total_cmp(a),
+            Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
+        };
         while missing_count < n_missing {
             let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
-            self.drop_cols(arr, &distributions, &cols);
+            // self.drop_cols(arr, &distributions, &cols);
+            self.drop_cols(arr, &distributions, &cols, cmp);
             missing_count += cols.len();
-            println!("{:?}", arr);
         }
     }
 
-    fn drop_cols(&mut self, arr: &mut Arc<Array2<f64>>, distributions: &[Gauss], cols: &[usize]) {
+    fn drop_cols(
+        &mut self,
+        arr: &mut Arc<Array2<f64>>,
+        distributions: &[Gauss],
+        cols: &[usize],
+        cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
+    ) {
         let (transmitter, receiver) = channel();
         let samples: Vec<f64> = cols
             .iter()
@@ -93,7 +126,8 @@ impl MNAR {
                     .enumerate()
                     .filter(|(_, v)| !v.is_nan())
                     .min_by(|(_, a), (_, b)| {
-                        ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
+                        cmp(*a, *b, &s)
+                        // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
                     .expect("No argmin found!")
                     .0;
@@ -152,14 +186,12 @@ fn transform(
 
 #[cfg(test)]
 mod test {
-    use crate::generators::mnar::transform;
-
     use super::*;
 
     #[test]
     fn create() {
-        let _ = MNAR::new(None, None, None, None);
-        let _ = MNAR::new(Some(0.5), Some(1.0), None, None);
+        let _ = MNAR::new(None, None, "gm", None, None);
+        let _ = MNAR::new(Some(0.5), Some(1.0), "gm", None, None);
     }
 
     #[test]

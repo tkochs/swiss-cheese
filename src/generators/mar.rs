@@ -151,8 +151,8 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MAR::new(None, None);
-        let _ = MAR::new(Some(5), Some(1));
+        let _ = MAR::new(0.8, None, None);
+        let _ = MAR::new(0.8, Some(5), Some(1));
     }
     #[test]
     fn correlations() {

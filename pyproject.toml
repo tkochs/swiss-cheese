@@ -20,6 +20,7 @@ dependencies = [
     "numpy>=2.4",
     "scipy>=1.16",
     "maturin>=1.13.3",
+    "pytest>=9.0.3",
     "scikit-learn>=1.8.0",
 ]
 

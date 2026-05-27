@@ -35,6 +35,7 @@ class MNARrs:
         self,
         mean: float | None = None,
         variance: float | None = None,
+        mode: str = "GM",
         seed: uint64 | None = None,
         n_workers: uint64 | None = None,
     ) -> None:
