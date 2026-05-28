@@ -1,3 +1,4 @@
+use ndarray::ArrayView2;
 use rand::prelude::*;
 
 pub struct Gauss {
@@ -26,6 +27,38 @@ impl Gauss {
 pub fn fix() {
     // "TODO: implement";
     // Fixes on value per row, that way every datapoint has at least one observed feature
+}
+
+pub fn get_distribution(mean: f64, var: f64, arr: ArrayView2<f64>) -> Vec<Gauss> {
+    let mut dist = Vec::with_capacity(arr.ncols());
+    let mut buff = Vec::with_capacity(arr.nrows());
+    for i in 0..arr.ncols() {
+        let col = arr.column(i);
+        let (local_mean, local_var) = transform(&mut buff, col.iter().copied(), mean, var);
+        dist.push(Gauss::new(local_mean, local_var));
+    }
+    dist
+}
+
+fn transform(
+    buff: &mut Vec<f64>,
+    col: impl Iterator<Item = f64>,
+    mean: f64,
+    var: f64,
+) -> (f64, f64) {
+    buff.clear();
+    buff.extend(col);
+    let n = (buff.len() as f64 * mean).floor() as usize;
+    buff.sort_unstable_by(|a, b| a.total_cmp(b));
+    let q = if buff.len() % 2 == 1 || n == 0 {
+        buff[n]
+    } else {
+        (buff[n - 1] + buff.get(n).unwrap_or_else(|| &buff[n - 1])) / 2.0
+    };
+    (
+        q,
+        (buff.last().expect("No elements in col") - buff[0]) * var,
+    )
 }
 
 #[cfg(test)]
@@ -64,5 +97,30 @@ mod test {
             "stddev = {}",
             stddev
         );
+    }
+
+    #[test]
+    fn _transform() {
+        let v = [1.0, 1.0, 2.0, 3.0, 4.0, 5.0].iter().copied();
+        let mut buff: Vec<f64> = vec![0.0; v.len()];
+        let (mean, var) = transform(&mut buff, v, 0.5, 1.0);
+        assert!((mean - 2.5).abs() < 1e-17, "Actual Mean: {mean}");
+        assert!((var - 4.0).abs() < 1e-17, "Actual Var: {var}");
+        let v = [0.0, 1.0, 2.0, 3.0, 4.0].iter().copied();
+        let mut buff: Vec<f64> = vec![0.0; v.len()];
+        let (mean, var) = transform(&mut buff, v, 0.25, 0.0);
+        assert!((mean - 1.0).abs() < 1e-17, "Actual Mean: {mean}");
+        assert!((var - 0.0).abs() < 1e-17, "Actual Var: {var}");
+        let v: Vec<f64> = (0..10).map(|x| x as f64).collect();
+        let mut buff: Vec<f64> = vec![0.0; v.len()];
+        let (mean, var) = transform(&mut buff, v.iter().copied(), 0.5, 0.0);
+        assert!((mean - 4.5).abs() < 1e-17, "Actual Mean: {mean}");
+        assert!((var - 0.0).abs() < 1e-17, "Actual Var: {var}");
+        let (mean, var) = transform(&mut buff, v.iter().copied(), 0.0, 1.0);
+        assert!((mean - 0.0).abs() < 1e-17, "Actual Mean: {mean}");
+        assert!((var - 9.0).abs() < 1e-17, "Actual Var: {var}");
+        let (mean, var) = transform(&mut buff, v.iter().copied(), 1.0, 0.0);
+        assert!((mean - 9.0).abs() < 1e-17, "Actual Mean: {mean}");
+        assert!((var - 0.0).abs() < 1e-17, "Actual Var: {var}");
     }
 }

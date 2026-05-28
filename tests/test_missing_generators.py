@@ -1,4 +1,4 @@
-from swiss_cheese import MCAR, MNAR, MNARParamters, MNARrs
+from swiss_cheese import MCAR, MNAR, MNARParamters, MNARrs, MAR
 from swiss_cheese.utils import max_missing_percentage
 import numpy as np
 import pandas as pd
@@ -214,6 +214,7 @@ def test_rs_stable():
         check_names=False,
     )
 
+
 def test_mnar_max_det():
     df = data("MNAR")
     missing = MNARrs(mode="max")(df, 0.1)
@@ -224,6 +225,7 @@ def test_mnar_max_det():
     assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
     assert missing.isna().sum().sum() == 5
 
+
 def test_mnar_min_det():
     df = data("MNAR")
     missing = MNARrs(mode="min")(df, 0.1)
@@ -233,3 +235,26 @@ def test_mnar_min_det():
     print(missing > df.min())
     assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
     assert missing.isna().sum().sum() == 5
+
+
+def test_gm():
+    df = data()
+    old = df.quantile(0.75)
+    missing = MNARrs(mean=1., seed=42)(df, 0.1)
+    miss = missing.quantile(0.75)
+
+    print("Clean quantiles")
+    print(old)
+    print("Missing quantiles")
+    print(miss)
+    assert (old > miss).all(), "old quantile should be larger"
+
+
+def test_mar():
+    df = data()
+    missing = MAR(mean=0.5)(df, 0.1)
+    print(missing)
+    print(df.min())
+    assert missing.isna().any(), "No MIssing values"
+    assert missing.isna().sum().sum() == 5, f"Wrong amount expected 5, got {
+        missing.isna().sum().sum()}"
