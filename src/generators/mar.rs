@@ -68,9 +68,12 @@ impl MAR {
 
 impl MAR {
     fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
+        let alpha = adjust_alpha(arr, alpha);
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
+        println!("should be missing {}", n_missing);
         let mut missing_count = 0;
         let (miss_cols, obs_cols, pairs) = self.pairs(arr, alpha);
+        println!("miss{:?},\n obs{:?}", &miss_cols, &obs_cols);
         let distributions = utils::get_distribution(self.mean, self.variance, arr.view());
         let cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering = match self.mode {
             Mode::MAX => |a, b, _| a.total_cmp(b),
@@ -92,6 +95,7 @@ impl MAR {
         cols: &[(usize, usize)],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
     ) {
+        println!("start drop");
         let (transmitter, receiver) = channel();
         let samples: Vec<f64> = cols
             .iter()
@@ -106,7 +110,7 @@ impl MAR {
                     .column(c.1)
                     .iter()
                     .enumerate()
-                    .filter(|(_, v)| !v.is_nan())
+                    .filter(|(i, _)| !_arr[(*i, c.0)].is_nan())
                     .min_by(|(_, a), (_, b)| {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
@@ -123,6 +127,7 @@ impl MAR {
         for (r, c) in indices {
             arr[(r, c.0)] = f64::NAN;
         }
+        println!("end drop");
     }
 
     fn pairs(
@@ -145,11 +150,11 @@ impl MAR {
             .pearson_correlation()
             .expect("Failed to calculate pearson_correlation");
         let mut max_corr = vec![(0.0, 0); n_miss];
-        for &mc in miss_cols {
+        for (&mc, id) in miss_cols.iter().zip(0..) {
             for &oc in obs_cols {
                 let c = correlations[(mc, oc)];
-                if c.abs() > max_corr[mc].0 {
-                    max_corr[mc] = (c.abs(), oc);
+                if c.abs() > max_corr[id].0 {
+                    max_corr[id] = (c.abs(), oc);
                 }
             }
         }

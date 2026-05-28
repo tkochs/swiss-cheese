@@ -1,5 +1,5 @@
 from enum import Enum
-from numpy import uint64
+# from numpy import uint64
 import pandas as pd
 
 
@@ -8,7 +8,7 @@ class MnarType(Enum):
 
 
 class MCAR:
-    def __init__(self, random_seed: uint64 | None = None) -> None: ...
+    def __init__(self, random_seed: int | None = None) -> None: ...
     def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame: ...
 
 
@@ -23,7 +23,7 @@ class MNAR:
         self,
         params: MNARParamters,
         mnar_type: MnarType = MnarType.MoG,
-        random_seed: uint64 | None = None,
+        random_seed: int | None = None,
     ) -> None:
         ...
 
@@ -36,8 +36,8 @@ class MNARrs:
         mean: float | None = None,
         variance: float | None = None,
         mode: str = "GM",
-        seed: uint64 | None = None,
-        n_workers: uint64 | None = None,
+        seed: int | None = None,
+        n_workers: int | None = None,
     ) -> None:
         ...
 
@@ -47,8 +47,11 @@ class MNARrs:
 class MAR:
     def __init__(
         self,
-        seed: uint64 | None = None,
-        n_workers: uint64 | None = None,
+        mean: float | None = None,
+        variance: float | None = None,
+        mode: str = "GM",
+        seed: int | None = None,
+        n_workers: int | None = None,
     ) -> None:
         ...
 

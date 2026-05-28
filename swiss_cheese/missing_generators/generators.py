@@ -44,6 +44,10 @@ class MCAR:
         return "MCAR"
 
 
+@deprecated("""
+Use MNARrs (Rust backend) instead.
+Python version won't be mainted further
+""")
 @dataclass
 class MNARParamters:
     means: None | float = None
@@ -62,11 +66,15 @@ class MNARParamters:
         #     self.weights = [1 / len(self.means)]
 
 
+@deprecated("Currently unused; unsure if it will be used again.")
 class MnarType(Enum):
     MoG = "Mixture-of-Gaussians"
 
 
-@deprecated("Use MNARrs (Rust backend)")
+@deprecated("""
+Use MNARrs (Rust backend) instead.
+Python version won't be mainted further
+""")
 class MNAR:
     def __init__(
         self,

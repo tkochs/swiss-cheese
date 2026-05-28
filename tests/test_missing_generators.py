@@ -69,7 +69,7 @@ def test_mcar_strdata():
 def test_mcar_error():
     with pytest.raises(ValueError):
         df = data()
-        missing = MCAR()(df, 0.9)
+        _ = MCAR()(df, 0.9)
 
 
 def test_max_percentage():
@@ -255,6 +255,6 @@ def test_mar():
     missing = MAR(mean=0.5)(df, 0.1)
     print(missing)
     print(df.min())
-    assert missing.isna().any(), "No MIssing values"
-    assert missing.isna().sum().sum() == 5, f"Wrong amount expected 5, got {
-        missing.isna().sum().sum()}"
+    assert missing.isna().any().any(), "No Missing values"
+    assert missing.isna().sum().sum() == 5, \
+        f"Wrong amount expected 5, got {missing.isna().sum().sum()}"
