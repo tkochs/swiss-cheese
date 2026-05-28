@@ -258,3 +258,13 @@ def test_mar():
     assert missing.isna().any().any(), "No Missing values"
     assert missing.isna().sum().sum() == 5, \
         f"Wrong amount expected 5, got {missing.isna().sum().sum()}"
+
+
+def test_mar_max():
+    df = data()
+    missing = MAR(mode="max")(df, 0.1)
+    print(missing)
+    print(df.min())
+    assert missing.isna().any().any(), "No Missing values"
+    assert missing.isna().sum().sum() == 5, \
+        f"Wrong amount expected 5, got {missing.isna().sum().sum()}"
