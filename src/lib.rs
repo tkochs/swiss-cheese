@@ -2,7 +2,6 @@ use pyo3::prelude::*;
 mod generators;
 mod utils;
 
-/// A Python module implemented in Rust.
 #[pymodule]
 mod swiss_cheese {
     use super::generators;
@@ -11,6 +10,7 @@ mod swiss_cheese {
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
         module.add_class::<generators::MNAR>()?;
+        module.add_class::<generators::MAR>()?;
         Ok(())
     }
 }
