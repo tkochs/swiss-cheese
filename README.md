@@ -18,3 +18,11 @@ Focuses on tabular data.
   #### Gaussian Missing (GM)
   Samples from a gaussian (mean, var given as parameter) and romves closest value.
   
+# Missing At Random (MAR)
+
+  Create pairs of observed and missing columns, then apply the MNAR schemes to the observed column but only set missing column to missing.
+  Default mode is _GM_ but _Max_ and _Min_ are also availble.
+
+  _Attention:_ *max_missing_per_column* defines a maximum percentage that can be miissing per column
+  It will _always_ be assured that at least one column remains observed. 
+  If $\alpha$ is higher than the maximum possible missing rate, it will be set to the maximum and a warning is emitted.
