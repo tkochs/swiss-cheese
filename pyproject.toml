@@ -19,10 +19,7 @@ dependencies = [
     "pandas>=2.3",
     "numpy>=2.4",
     "scipy>=1.16",
-    "maturin>=1.13.3",
-    "pytest>=9.0.3",
     "scikit-learn>=1.8.0",
-    "pandas-stubs>=3.0.0.260204",
 ]
 
 [tool.maturin]
@@ -32,10 +29,6 @@ python-source = "."
 dev = [
     "maturin>=1.13.3",
     "pytest>=9.0.3",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0",
+    "pandas-stubs>=3.0.0.260204",
 ]
 
