@@ -115,12 +115,12 @@ def test_mnar_median():
 
 def test_mnar_var():
     df = data("MNAR")
-    missing = MNARrs(0, 1)(df, 0.1)
+    missing = MNARrs(0.5, 1)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
-    assert not missing.iloc[0, :].isna().all()
+    assert not missing.iloc[4, :].isna().all(), "Entire row is NaN!" 
 
 
 def test_mnar_alpha():
@@ -144,7 +144,8 @@ def test_mnar_alpha():
 
 def test_mnarrs():
     df = data()
-    missing = MNAR(MNARParamters())(df, 0.1)
+    with pytest.warns(DeprecationWarning):
+        missing = MNAR(MNARParamters())(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
@@ -158,7 +159,8 @@ def test_mnarrs():
 
 def test_rs_str():
     df = data("WithStr")
-    missing = MNAR(MNARParamters())(df, 0.1)
+    with pytest.warns(DeprecationWarning):
+        missing = MNAR(MNARParamters())(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
@@ -176,7 +178,8 @@ def test_time():
     df = pd.DataFrame(arr)
     print(df)
     start = time.time()
-    _ = MNAR(MNARParamters())(df, 0.5)
+    with pytest.warns(DeprecationWarning):
+        _ = MNAR(MNARParamters())(df, 0.5)
     total_py = time.time() - start
 
     start = time.time()
@@ -268,3 +271,15 @@ def test_mar_max():
     assert missing.isna().any().any(), "No Missing values"
     assert missing.isna().sum().sum() == 5, \
         f"Wrong amount expected 5, got {missing.isna().sum().sum()}"
+
+def test_mar_warning():
+    # should emit warning as missing rate is too high
+    df = data()
+    with pytest.warns(UserWarning):
+        missing = MAR()(df, 1.0)
+    print(missing)
+    print(df.min())
+    expected = df.shape[0] * 0.8 * (df.shape[1] - 1)
+    assert missing.isna().any().any(), "No Missing values"
+    assert missing.isna().sum().sum() == expected, \
+        f"Wrong amount expected {expected }, got {missing.isna().sum().sum()}"
