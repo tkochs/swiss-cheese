@@ -183,7 +183,7 @@ def test_time():
     total_py = time.time() - start
 
     start = time.time()
-    _ = MNARrs(n_workers=10)(df, 0.5)
+    _ = MNARrs()(df, 0.5)
     total_rs = time.time() - start
 
     assert total_rs < 1 * \

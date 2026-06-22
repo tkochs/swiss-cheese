@@ -2,7 +2,7 @@ use super::{common::mode::*, constants, utils};
 use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
 use ndarray_stats::CorrelationExt;
-use pyo3::exceptions::{PyUserWarning, PyValueError};
+use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
 use std::sync::{Arc, mpsc::channel};
@@ -50,11 +50,8 @@ impl MAR {
         data: &Bound<'_, PyAny>,
         alpha: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let ((vec, nrows, ncols), out, enc_info) =
-            pyany_to_vec(py, data, Some(StringEncoding::LabelEncoding))?;
+        let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
         utils::fix();
-        let array = Array2::from_shape_vec((nrows, ncols), vec)
-            .map_err(|e| PyErr::new::<PyValueError, _>(e.to_string()))?;
         let mut arr = Arc::new(array);
         let alpha = self._adjust_alpha(py, arr.ncols(), alpha);
         self.drop(&mut arr, alpha);
