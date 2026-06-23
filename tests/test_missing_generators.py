@@ -1,9 +1,8 @@
-from swiss_cheese import MCAR, MNAR, MNARParamters, MNARrs, MAR
+from swiss_cheese import MCAR, MNAR, MAR
 from swiss_cheese.utils import max_missing_percentage
 import numpy as np
 import pandas as pd
 import pytest
-import time
 
 
 def data(kind: str = "MCAR"):
@@ -80,7 +79,7 @@ def test_max_percentage():
 
 def test_mnar_min():
     df = data("MNAR")
-    missing = MNARrs(mean=1)(df, 0.1)
+    missing = MNAR(mean=1)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(df)
     print(missing)
@@ -92,7 +91,7 @@ def test_mnar_min():
 
 def test_mnar_max():
     df = data("MNAR")
-    missing = MNARrs(mean=0)(df, 0.1)
+    missing = MNAR(mean=0)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
@@ -103,7 +102,7 @@ def test_mnar_max():
 
 def test_mnar_median():
     df = data("MNAR")
-    missing = MNARrs(mean=0.5)(df, 0.1)
+    missing = MNAR(mean=0.5)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(df)
     print(missing)
@@ -115,7 +114,7 @@ def test_mnar_median():
 
 def test_mnar_var():
     df = data("MNAR")
-    missing = MNARrs(0.5, 1)(df, 0.1)
+    missing = MNAR(0.5, 1)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
@@ -125,17 +124,17 @@ def test_mnar_var():
 
 def test_mnar_alpha():
     df = data()
-    missing = MNARrs()(df, 0.1)
+    missing = MNAR()(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
 
-    missing = MNARrs()(df, 0.2)
+    missing = MNAR()(df, 0.2)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 10
 
-    missing = MNARrs()(df, 0.15)
+    missing = MNAR()(df, 0.15)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 8
@@ -144,14 +143,7 @@ def test_mnar_alpha():
 
 def test_mnarrs():
     df = data()
-    with pytest.warns(DeprecationWarning):
-        missing = MNAR(MNARParamters())(df, 0.1)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 5
-
-    df = data()
-    missing = MNARrs(mean=0.5)(df, 0.1)
+    missing = MNAR(mean=0.5)(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
@@ -159,15 +151,8 @@ def test_mnarrs():
 
 def test_rs_str():
     df = data("WithStr")
-    with pytest.warns(DeprecationWarning):
-        missing = MNAR(MNARParamters())(df, 0.1)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 5
-
     print(df.dtypes)
-    df = data("WithStr")
-    missing = MNARrs(mean=0.5)(df, 0.1)
+    missing = MNAR(mean=0.5)(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
@@ -175,7 +160,7 @@ def test_rs_str():
 
 def test_rs_stable():
     df = data()
-    missing = MNARrs()(df, 0.1)
+    missing = MNAR()(df, 0.1)
     print(df)
     print(missing)
     print(df.min())
@@ -188,7 +173,7 @@ def test_rs_stable():
     )
 
     df = data("WithStr")
-    missing = MNARrs()(df, 0.1)
+    missing = MNAR()(df, 0.1)
     print(df)
     print(missing)
     print(df.min())
@@ -203,7 +188,7 @@ def test_rs_stable():
 
 def test_mnar_max_det():
     df = data("MNAR")
-    missing = MNARrs(mode="max")(df, 0.1)
+    missing = MNAR(mode="max")(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
@@ -214,7 +199,7 @@ def test_mnar_max_det():
 
 def test_mnar_min_det():
     df = data("MNAR")
-    missing = MNARrs(mode="min")(df, 0.1)
+    missing = MNAR(mode="min")(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
@@ -226,7 +211,7 @@ def test_mnar_min_det():
 def test_gm():
     df = data()
     old = df.quantile(0.75)
-    missing = MNARrs(mean=1., random_seed=42)(df, 0.1)
+    missing = MNAR(mean=1., random_seed=42)(df, 0.1)
     miss = missing.quantile(0.75)
 
     print("Clean quantiles")

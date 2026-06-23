@@ -1,16 +1,16 @@
 use super::{
     common::mode::*,
     constants,
-    utils::{fix, get_distribution, Gauss},
+    utils::{Gauss, fix, get_distribution},
 };
-use crate::utils::{arr_to_out, pyany_to_vec, StringEncoding};
+use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
 use pyo3::prelude::*;
 use rand::prelude::*;
 use rayon::prelude::*;
 use std::sync::Arc;
 
-#[pyclass(name = "MNARrs")]
+#[pyclass(name = "MNAR")]
 pub struct MNAR {
     mean: f64,
     variance: f64,

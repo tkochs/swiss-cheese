@@ -8,6 +8,14 @@ uv add swiss-cheese
 pip install swiss-cheese
 ```
 
+__Usage:__
+```
+from swiss-cheese import MNAR
+
+generator = MNAR()
+missing_df = generator(df, 0.4) # returns np.array or DataFrame with 40% missingness
+```
+
 # Missing Completely At Random (MCAR)
 
   Sets $\alpha$ percentage of values to missing completely at random.
