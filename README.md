@@ -10,7 +10,7 @@ pip install swiss-cheese
 
 __Usage:__
 ``` python
-from swiss-cheese import MNAR
+from swiss_cheese import MNAR
 
 generator = MNAR()
 missing_df = generator(df, 0.4) # returns np.array or DataFrame with 40% missingness
