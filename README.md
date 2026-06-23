@@ -3,7 +3,7 @@ Making missing values for research purposes.
 Focuses on tabular data.
 
 __installation:__
-```
+``` bash
 uv add swiss-cheese
 pip install swiss-cheese
 ```
