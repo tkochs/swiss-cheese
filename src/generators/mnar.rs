@@ -1,16 +1,17 @@
 use super::{
     common::mode::*,
     constants,
-    utils::{fix, get_distribution, Gauss},
+    utils::{Gauss, fix, get_distribution},
 };
-use crate::utils::{arr_to_out, pyany_to_vec, StringEncoding};
+use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
+use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
 use rayon::prelude::*;
 use std::sync::Arc;
 
-#[pyclass(name = "MNARrs")]
+#[pyclass(name = "MNAR")]
 pub struct MNAR {
     mean: f64,
     variance: f64,
@@ -21,11 +22,11 @@ pub struct MNAR {
 #[pymethods]
 impl MNAR {
     #[new]
-    #[pyo3(signature = (mean= None, variance=None, mode="GM", seed=None))]
-    fn new(mean: Option<f64>, variance: Option<f64>, mode: &str, seed: Option<u64>) -> MNAR {
+    #[pyo3(signature = (mean= None, variance=None, mode="GM", random_seed=None))]
+    fn new(mean: Option<f64>, variance: Option<f64>, mode: &str, random_seed: Option<u64>) -> MNAR {
         let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
         let variance = variance.unwrap_or(constants::DEFAULT_VAR);
-        let seed = seed.unwrap_or(
+        let seed = random_seed.unwrap_or(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("Getting time failed")
@@ -45,12 +46,13 @@ impl MNAR {
         &mut self,
         py: Python<'py>,
         data: &Bound<'_, PyAny>,
-        alpha: f64,
+        missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
         let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
-        fix();
+        let missing_rate = self._adjust_alpha(py, array.ncols(), missing_rate);
         let mut arr = Arc::new(array);
-        self.drop(&mut arr, alpha);
+
+        self.drop(&mut arr, missing_rate);
         arr_to_out(py, &arr, out, enc_info)
     }
 
@@ -69,11 +71,10 @@ impl MNAR {
             Mode::MIN => |a, b, _| b.total_cmp(a),
             Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
         };
+        let fix = fix(arr.shape(), &mut self.rng);
         while missing_count < n_missing {
             let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
-            // self.drop_cols(arr, &distributions, &cols);
-            self.drop_cols(arr, &distributions, &cols, cmp);
-            missing_count += cols.len();
+            missing_count += self.drop_cols(arr, &distributions, &cols, cmp, &fix);
         }
     }
 
@@ -83,7 +84,8 @@ impl MNAR {
         distributions: &[Gauss],
         cols: &[usize],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
-    ) {
+        fix: &[usize],
+    ) -> usize {
         let samples: Vec<f64> = cols
             .iter()
             .map(|&c| distributions[c].sample(&mut self.rng))
@@ -97,19 +99,40 @@ impl MNAR {
                     .column(c)
                     .iter()
                     .enumerate()
-                    .filter(|(_, v)| !v.is_nan())
+                    .filter(|(i, v)| !v.is_nan() && fix[*i] != c)
                     .min_by(|(_, a), (_, b)| {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
-                    .expect("No argmin found!")
-                    .0;
+                    .map_or(None, |(i, _)| Some(i)); //&format!("No argmin found for {c}!"))
                 (i, c)
             })
             .collect();
         let arr = Arc::get_mut(arr).expect("Still references alive");
-        for (r, c) in indices {
-            arr[(r, c)] = f64::NAN;
+        let mut count = 0;
+        for (opt, c) in indices {
+            opt.map(|r| {
+                arr[(r, c)] = f64::NAN;
+                count += 1;
+            });
+        }
+        count
+    }
+
+    #[inline]
+    fn _adjust_alpha<'py>(&self, py: Python<'py>, n_cols: usize, alpha: f64) -> f64 {
+        let max = 1.0 - (1.0 / n_cols as f64);
+        if alpha > max {
+            let msg = std::ffi::CString::new(format!(
+                "Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {}",
+                max
+            ))
+            .unwrap();
+            PyErr::warn(py, &py.get_type::<PyUserWarning>(), &msg, 0)
+                .expect("Something went wrong..");
+            max
+        } else {
+            alpha
         }
     }
 }

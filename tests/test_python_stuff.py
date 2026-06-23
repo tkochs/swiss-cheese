@@ -1,8 +1,8 @@
-from swiss_cheese import MNARrs, MAR
+from swiss_cheese import MNAR, MAR
 
 
 def test_name_mnar():
-    m = MNARrs(0.5)
+    m = MNAR(0.5)
     assert str(m) == "MNAR[0.5]"
 
 

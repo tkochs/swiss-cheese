@@ -1,9 +1,8 @@
-from swiss_cheese import MCAR, MNAR, MNARParamters, MNARrs, MAR
+from swiss_cheese import MCAR, MNAR, MAR
 from swiss_cheese.utils import max_missing_percentage
 import numpy as np
 import pandas as pd
 import pytest
-import time
 
 
 def data(kind: str = "MCAR"):
@@ -67,9 +66,23 @@ def test_mcar_strdata():
 
 
 def test_mcar_error():
-    with pytest.raises(ValueError):
+    with pytest.warns(UserWarning):
         df = data()
-        _ = MCAR()(df, 0.9)
+        missing = MCAR()(df, 0.9)
+    n_miss = missing.isna().sum().sum()
+    print(missing)
+    print(n_miss)
+    assert n_miss == df.size * 0.8
+
+
+def test_mnar_warn():
+    with pytest.warns(UserWarning):
+        df = data()
+        missing = MNAR()(df, 1.0)
+    n_miss = missing.isna().sum().sum()
+    print(missing)
+    print(n_miss)
+    assert n_miss == df.size * 0.8
 
 
 def test_max_percentage():
@@ -80,62 +93,67 @@ def test_max_percentage():
 
 def test_mnar_min():
     df = data("MNAR")
-    missing = MNARrs(mean=1)(df, 0.1)
+    missing = MNAR(mean=1)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(df)
     print(missing)
     print(df.max())
     print(missing < df.max())
-    assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
-    assert missing.isna().sum().sum() == 5
+    # assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
+    missing = missing.iloc[-1]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_mnar_max():
     df = data("MNAR")
-    missing = MNARrs(mean=0)(df, 0.1)
+    missing = MNAR(mean=0)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
     print(missing > df.min())
-    assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
-    assert missing.isna().sum().sum() == 5
+    assert missing.isna().sum().sum() == 5, "Wrong total"
+    # assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
+    missing = missing.iloc[0]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_mnar_median():
     df = data("MNAR")
-    missing = MNARrs(mean=0.5)(df, 0.1)
+    missing = MNAR(mean=0.5)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(df)
     print(missing)
     print(df.quantile(0.5))
     print(missing.iloc[4, 2])
-    assert np.isnan(missing.iloc[4, :]).all(), "median test"
+    assert np.isnan(missing.iloc[4, :]).sum() == 4, "Complete row is missing"
     assert missing.isna().sum().sum() == 5
 
 
 def test_mnar_var():
     df = data("MNAR")
-    missing = MNARrs(0.5, 1)(df, 0.1)
+    missing = MNAR(0.5, 1)(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
-    assert not missing.iloc[4, :].isna().all(), "Entire row is NaN!" 
+    assert not missing.iloc[4, :].isna().all(), "Entire row is NaN!"
 
 
 def test_mnar_alpha():
     df = data()
-    missing = MNARrs()(df, 0.1)
+    missing = MNAR()(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
 
-    missing = MNARrs()(df, 0.2)
+    missing = MNAR()(df, 0.2)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 10
 
-    missing = MNARrs()(df, 0.15)
+    missing = MNAR()(df, 0.15)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 8
@@ -144,14 +162,7 @@ def test_mnar_alpha():
 
 def test_mnarrs():
     df = data()
-    with pytest.warns(DeprecationWarning):
-        missing = MNAR(MNARParamters())(df, 0.1)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 5
-
-    df = data()
-    missing = MNARrs(mean=0.5)(df, 0.1)
+    missing = MNAR(mean=0.5)(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
@@ -159,40 +170,16 @@ def test_mnarrs():
 
 def test_rs_str():
     df = data("WithStr")
-    with pytest.warns(DeprecationWarning):
-        missing = MNAR(MNARParamters())(df, 0.1)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 5
-
     print(df.dtypes)
-    df = data("WithStr")
-    missing = MNARrs(mean=0.5)(df, 0.1)
+    missing = MNAR(mean=0.5)(df, 0.1)
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
-
-
-def test_time():
-    arr = np.random.rand(500, 5)
-    df = pd.DataFrame(arr)
-    print(df)
-    start = time.time()
-    with pytest.warns(DeprecationWarning):
-        _ = MNAR(MNARParamters())(df, 0.5)
-    total_py = time.time() - start
-
-    start = time.time()
-    _ = MNARrs()(df, 0.5)
-    total_rs = time.time() - start
-
-    assert total_rs < 1 * \
-        total_py, "not faster :( \nrs:{total_rs}, py:{total_py}"
 
 
 def test_rs_stable():
     df = data()
-    missing = MNARrs()(df, 0.1)
+    missing = MNAR()(df, 0.1)
     print(df)
     print(missing)
     print(df.min())
@@ -205,7 +192,7 @@ def test_rs_stable():
     )
 
     df = data("WithStr")
-    missing = MNARrs()(df, 0.1)
+    missing = MNAR()(df, 0.1)
     print(df)
     print(missing)
     print(df.min())
@@ -220,30 +207,37 @@ def test_rs_stable():
 
 def test_mnar_max_det():
     df = data("MNAR")
-    missing = MNARrs(mode="max")(df, 0.1)
+    missing = MNAR(mode="max")(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
     print(missing > df.min())
-    assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
-    assert missing.isna().sum().sum() == 5
+    # assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
+    assert missing.isna().sum().sum() == 5, "Wrong total"
+    missing = missing.iloc[0]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_mnar_min_det():
     df = data("MNAR")
-    missing = MNARrs(mode="min")(df, 0.1)
+    missing = MNAR(mode="min")(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
     print(df.min())
     print(missing > df.min())
-    assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
-    assert missing.isna().sum().sum() == 5
+    # assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
+    # assert missing.isna().sum().sum() == 4
+    assert missing.isna().sum().sum() == 5, "Wrong total"
+    missing = missing.iloc[-1]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_gm():
     df = data()
     old = df.quantile(0.75)
-    missing = MNARrs(mean=1., seed=42)(df, 0.1)
+    missing = MNAR(mean=1., random_seed=42)(df, 0.1)
     miss = missing.quantile(0.75)
 
     print("Clean quantiles")
@@ -272,6 +266,7 @@ def test_mar_max():
     assert missing.isna().sum().sum() == 5, \
         f"Wrong amount expected 5, got {missing.isna().sum().sum()}"
 
+
 def test_mar_warning():
     # should emit warning as missing rate is too high
     df = data()
@@ -282,4 +277,4 @@ def test_mar_warning():
     expected = df.shape[0] * 0.8 * (df.shape[1] - 1)
     assert missing.isna().any().any(), "No Missing values"
     assert missing.isna().sum().sum() == expected, \
-        f"Wrong amount expected {expected }, got {missing.isna().sum().sum()}"
+        f"Wrong amount expected {expected}, got {missing.isna().sum().sum()}"

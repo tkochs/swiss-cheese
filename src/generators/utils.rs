@@ -8,7 +8,6 @@ pub struct Gauss {
 
 impl Gauss {
     pub fn new(mean: f64, var: f64) -> Gauss {
-        // let rng = std::cell::RefCell::new(StdRng::seed_from_u64(seed));
         Gauss { mean, var }
     }
 
@@ -24,9 +23,14 @@ impl Gauss {
         self.mean + self.var * z
     }
 }
-pub fn fix() {
-    // "TODO: implement";
-    // Fixes on value per row, that way every datapoint has at least one observed feature
+pub fn fix(shape: &[usize], rng: &mut StdRng) -> Vec<usize> {
+    let &[rows, cols, ..] = shape else {
+        panic!("fix() needs at least [rows, cols]");
+    };
+    (0..rows)
+        .into_iter()
+        .map(|_| rng.random_range(0..cols))
+        .collect()
 }
 
 pub fn get_distribution(mean: f64, var: f64, arr: ArrayView2<f64>) -> Vec<Gauss> {
