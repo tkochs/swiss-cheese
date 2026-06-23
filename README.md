@@ -9,7 +9,7 @@ pip install swiss-cheese
 ```
 
 __Usage:__
-```
+``` python
 from swiss-cheese import MNAR
 
 generator = MNAR()
