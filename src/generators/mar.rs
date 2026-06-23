@@ -71,8 +71,7 @@ impl MAR {
         };
         while missing_count < n_missing {
             let cols = select_cols(&mut self.rng, arr, missing_count, n_missing, &miss_cols);
-            self.drop_cols(arr, &distributions, &pairs, cmp);
-            missing_count += cols.len();
+            missing_count += self.drop_cols(arr, &distributions, &pairs, cmp);
         }
     }
 
@@ -83,7 +82,7 @@ impl MAR {
         // obs: &HashMap<usize, usize>,
         cols: &[(usize, usize)],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
-    ) {
+    ) -> usize {
         let samples: Vec<f64> = cols
             .iter()
             .map(|&c| distributions[c.1].sample(&mut self.rng))
@@ -102,15 +101,19 @@ impl MAR {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
-                    .expect("No argmin found!")
-                    .0;
+                    .map_or(None, |(i, _)| Some(i));
                 (i, c)
             })
             .collect();
         let arr = Arc::get_mut(arr).expect("Err: Multithreading issue detected!");
-        for (r, c) in indices {
-            arr[(r, c.0)] = f64::NAN;
+        let mut count = 0;
+        for (opt, c) in indices {
+            opt.map(|r| {
+                arr[(r, c.0)] = f64::NAN;
+                count += 1;
+            });
         }
+        count
     }
 
     fn pairs(

@@ -74,8 +74,7 @@ impl MNAR {
         let fix = fix(arr.shape(), &mut self.rng);
         while missing_count < n_missing {
             let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
-            self.drop_cols(arr, &distributions, &cols, cmp, &fix);
-            missing_count += cols.len();
+            missing_count += self.drop_cols(arr, &distributions, &cols, cmp, &fix);
         }
     }
 
@@ -86,7 +85,7 @@ impl MNAR {
         cols: &[usize],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
         fix: &[usize],
-    ) {
+    ) -> usize {
         let samples: Vec<f64> = cols
             .iter()
             .map(|&c| distributions[c].sample(&mut self.rng))
@@ -110,9 +109,14 @@ impl MNAR {
             })
             .collect();
         let arr = Arc::get_mut(arr).expect("Still references alive");
+        let mut count = 0;
         for (opt, c) in indices {
-            opt.map(|r| arr[(r, c)] = f64::NAN);
+            opt.map(|r| {
+                arr[(r, c)] = f64::NAN;
+                count += 1;
+            });
         }
+        count
     }
 
     #[inline]

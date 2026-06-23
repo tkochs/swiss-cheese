@@ -66,9 +66,23 @@ def test_mcar_strdata():
 
 
 def test_mcar_error():
-    with pytest.raises(ValueError):
+    with pytest.warns(UserWarning):
         df = data()
-        _ = MCAR()(df, 0.9)
+        missing = MCAR()(df, 0.9)
+    n_miss = missing.isna().sum().sum()
+    print(missing)
+    print(n_miss)
+    assert n_miss == df.size * 0.8
+
+
+def test_mnar_warn():
+    with pytest.warns(UserWarning):
+        df = data()
+        missing = MNAR()(df, 1.0)
+    n_miss = missing.isna().sum().sum()
+    print(missing)
+    print(n_miss)
+    assert n_miss == df.size * 0.8
 
 
 def test_max_percentage():

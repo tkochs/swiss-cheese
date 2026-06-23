@@ -1,10 +1,8 @@
-from dataclasses import dataclass
 from typing import override
-from warnings import deprecated
+from warnings import warn
 import numpy as np
 import pandas as pd
-from enum import Enum
-from .utils import max_missing_percentage, frequency_encode, Gauss
+from .utils import max_missing_percentage  # , frequency_encode, Gauss
 
 
 class MCAR:
@@ -12,6 +10,7 @@ class MCAR:
         self.seed: int | None = random_seed
 
     def __call__(self, df: pd.DataFrame, missing_rate: float) -> pd.DataFrame:
+        missing_rate = _adjust_missing_rate(df, missing_rate)
         n = df.size
         n_features = df.shape[1]
         n_missing = round(n * missing_rate)
@@ -42,3 +41,14 @@ class MCAR:
     @override
     def __repr__(self):
         return "MCAR"
+
+
+def _adjust_missing_rate(df: pd.DataFrame, missing_rate: float) -> float:
+    max = 1.0 - (1.0 / df.shape[1])
+    if missing_rate > max:
+        warn(
+            f"Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {
+                max}", UserWarning
+        )
+        return max
+    return missing_rate
