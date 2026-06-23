@@ -1,6 +1,7 @@
 # swiss-cheese
 Making missing values for research purposes.
 Focuses on tabular data.
+Supports categorical and numerical values.
 
 __installation:__
 ``` bash
@@ -40,3 +41,8 @@ missing_df = generator(df, 0.4) # returns np.array or DataFrame with 40% missing
   _Attention:_ *max_missing_per_column* defines a maximum percentage that can be miissing per column
   It will _always_ be assured that at least one column remains observed. 
   If $\alpha$ is higher than the maximum possible missing rate, it will be set to the maximum and a warning is emitted.
+
+
+## Generators
+All generators try to achieve the desired missingness rate, however they will ensure that every item has at least one observed feature.
+If it that constraint does not allow for the desired missingness rate it will warn the user and set the missing rate to maximal possible missing rate.
