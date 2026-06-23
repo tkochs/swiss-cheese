@@ -6,7 +6,6 @@ __installation:__
 ```
 uv add swiss-cheese
 pip install swiss-cheese
-
 ```
 
 # Missing Completely At Random (MCAR)
