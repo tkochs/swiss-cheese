@@ -45,12 +45,12 @@ impl MNAR {
         &mut self,
         py: Python<'py>,
         data: &Bound<'_, PyAny>,
-        alpha: f64,
+        missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
         let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
         fix();
         let mut arr = Arc::new(array);
-        self.drop(&mut arr, alpha);
+        self.drop(&mut arr, missing_rate);
         arr_to_out(py, &arr, out, enc_info)
     }
 

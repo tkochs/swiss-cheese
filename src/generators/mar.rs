@@ -44,13 +44,13 @@ impl MAR {
         &mut self,
         py: Python<'py>,
         data: &Bound<'_, PyAny>,
-        alpha: f64,
+        missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
         let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
         utils::fix();
         let mut arr = Arc::new(array);
-        let alpha = self._adjust_alpha(py, arr.ncols(), alpha);
-        self.drop(&mut arr, alpha);
+        let missing_rate = self._adjust_alpha(py, arr.ncols(), missing_rate);
+        self.drop(&mut arr, missing_rate);
         arr_to_out(py, &arr, out, enc_info)
     }
 

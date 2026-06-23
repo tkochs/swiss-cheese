@@ -11,10 +11,10 @@ class MCAR:
     def __init__(self, random_seed: None | int = None):
         self.seed: int | None = random_seed
 
-    def __call__(self, df: pd.DataFrame, alpha: float) -> pd.DataFrame:
+    def __call__(self, df: pd.DataFrame, missing_rate: float) -> pd.DataFrame:
         n = df.size
         n_features = df.shape[1]
-        n_missing = round(n * alpha)
+        n_missing = round(n * missing_rate)
         if n_missing == 0:
             return df
         df = df.copy()  # .astype(np.float64)
@@ -29,7 +29,7 @@ class MCAR:
             raise ValueError(
                 f"Cannot comply, max missing rate is {
                     max_missing_percentage(df)
-                }, requested is: {alpha}"
+                }, requested is: {missing_rate}"
             )
         indices = grouped[keep].flatten()
         indices = rng.choice(indices, size=n_missing, replace=False)
