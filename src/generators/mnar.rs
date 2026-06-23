@@ -5,6 +5,7 @@ use super::{
 };
 use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
+use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -48,8 +49,9 @@ impl MNAR {
         missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
         let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
-        fix();
+        let missing_rate = self._adjust_alpha(py, array.ncols(), missing_rate);
         let mut arr = Arc::new(array);
+
         self.drop(&mut arr, missing_rate);
         arr_to_out(py, &arr, out, enc_info)
     }
@@ -69,10 +71,11 @@ impl MNAR {
             Mode::MIN => |a, b, _| b.total_cmp(a),
             Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
         };
+        let fix = fix(arr.shape(), &mut self.rng);
+        println!("{:?}", fix);
         while missing_count < n_missing {
             let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
-            // self.drop_cols(arr, &distributions, &cols);
-            self.drop_cols(arr, &distributions, &cols, cmp);
+            self.drop_cols(arr, &distributions, &cols, cmp, &fix);
             missing_count += cols.len();
         }
     }
@@ -83,6 +86,7 @@ impl MNAR {
         distributions: &[Gauss],
         cols: &[usize],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
+        fix: &[usize],
     ) {
         let samples: Vec<f64> = cols
             .iter()
@@ -97,7 +101,7 @@ impl MNAR {
                     .column(c)
                     .iter()
                     .enumerate()
-                    .filter(|(_, v)| !v.is_nan())
+                    .filter(|(i, v)| !v.is_nan() && fix[*i] != c)
                     .min_by(|(_, a), (_, b)| {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
@@ -110,6 +114,23 @@ impl MNAR {
         let arr = Arc::get_mut(arr).expect("Still references alive");
         for (r, c) in indices {
             arr[(r, c)] = f64::NAN;
+        }
+    }
+
+    #[inline]
+    fn _adjust_alpha<'py>(&self, py: Python<'py>, n_cols: usize, alpha: f64) -> f64 {
+        let max = 1.0 - (1.0 / n_cols as f64);
+        if alpha > max {
+            let msg = std::ffi::CString::new(format!(
+                "Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {}",
+                max
+            ))
+            .unwrap();
+            PyErr::warn(py, &py.get_type::<PyUserWarning>(), &msg, 0)
+                .expect("Something went wrong..");
+            max
+        } else {
+            alpha
         }
     }
 }

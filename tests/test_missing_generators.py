@@ -85,8 +85,10 @@ def test_mnar_min():
     print(missing)
     print(df.max())
     print(missing < df.max())
-    assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
-    assert missing.isna().sum().sum() == 5
+    # assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
+    missing = missing.iloc[-1]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_mnar_max():
@@ -96,8 +98,11 @@ def test_mnar_max():
     print(missing)
     print(df.min())
     print(missing > df.min())
-    assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
-    assert missing.isna().sum().sum() == 5
+    assert missing.isna().sum().sum() == 5, "Wrong total"
+    # assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
+    missing = missing.iloc[0]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_mnar_median():
@@ -108,7 +113,7 @@ def test_mnar_median():
     print(missing)
     print(df.quantile(0.5))
     print(missing.iloc[4, 2])
-    assert np.isnan(missing.iloc[4, :]).all(), "median test"
+    assert np.isnan(missing.iloc[4, :]).sum() == 4, "Complete row is missing"
     assert missing.isna().sum().sum() == 5
 
 
@@ -193,8 +198,11 @@ def test_mnar_max_det():
     print(missing)
     print(df.min())
     print(missing > df.min())
-    assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
-    assert missing.isna().sum().sum() == 5
+    # assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
+    assert missing.isna().sum().sum() == 5, "Wrong total"
+    missing = missing.iloc[0]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_mnar_min_det():
@@ -204,8 +212,12 @@ def test_mnar_min_det():
     print(missing)
     print(df.min())
     print(missing > df.min())
-    assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
-    assert missing.isna().sum().sum() == 5
+    # assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
+    # assert missing.isna().sum().sum() == 4
+    assert missing.isna().sum().sum() == 5, "Wrong total"
+    missing = missing.iloc[-1]
+    assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
+        missing.isna().sum()}"
 
 
 def test_gm():

@@ -47,7 +47,6 @@ impl MAR {
         missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
         let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
-        utils::fix();
         let mut arr = Arc::new(array);
         let missing_rate = self._adjust_alpha(py, arr.ncols(), missing_rate);
         self.drop(&mut arr, missing_rate);
@@ -56,23 +55,6 @@ impl MAR {
 
     fn __repr__(&self) -> String {
         format!("MAR")
-    }
-
-    #[inline]
-    fn _adjust_alpha<'py>(&self, py: Python<'py>, n_cols: usize, alpha: f64) -> f64 {
-        let max = self.max_missing_per_column - (self.max_missing_per_column / n_cols as f64);
-        if alpha > max {
-            let msg = std::ffi::CString::new(format!(
-                "Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {}",
-                max
-            ))
-            .unwrap();
-            PyErr::warn(py, &py.get_type::<PyUserWarning>(), &msg, 0)
-                .expect("Something went wrong..");
-            max
-        } else {
-            alpha
-        }
     }
 }
 
@@ -170,6 +152,23 @@ impl MAR {
                 .map(|(a, (_, b))| (*a, b))
                 .collect(),
         )
+    }
+
+    #[inline]
+    fn _adjust_alpha<'py>(&self, py: Python<'py>, n_cols: usize, alpha: f64) -> f64 {
+        let max = self.max_missing_per_column - (self.max_missing_per_column / n_cols as f64);
+        if alpha > max {
+            let msg = std::ffi::CString::new(format!(
+                "Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {}",
+                max
+            ))
+            .unwrap();
+            PyErr::warn(py, &py.get_type::<PyUserWarning>(), &msg, 0)
+                .expect("Something went wrong..");
+            max
+        } else {
+            alpha
+        }
     }
 }
 
