@@ -36,8 +36,7 @@ class MNARrs:
         mean: float | None = None,
         variance: float | None = None,
         mode: str = "GM",
-        seed: int | None = None,
-        n_workers: int | None = None,
+        random_seed: int | None = None,
     ) -> None:
         ...
 
@@ -50,8 +49,7 @@ class MAR:
         mean: float | None = None,
         variance: float | None = None,
         mode: str = "GM",
-        seed: int | None = None,
-        n_workers: int | None = None,
+        random_seed: int | None = None,
     ) -> None:
         ...
 

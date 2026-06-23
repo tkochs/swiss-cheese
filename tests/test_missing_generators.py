@@ -120,7 +120,7 @@ def test_mnar_var():
     print(missing)
     print(df.min())
     assert missing.isna().sum().sum() == 5
-    assert not missing.iloc[4, :].isna().all(), "Entire row is NaN!" 
+    assert not missing.iloc[4, :].isna().all(), "Entire row is NaN!"
 
 
 def test_mnar_alpha():
@@ -243,7 +243,7 @@ def test_mnar_min_det():
 def test_gm():
     df = data()
     old = df.quantile(0.75)
-    missing = MNARrs(mean=1., seed=42)(df, 0.1)
+    missing = MNARrs(mean=1., random_seed=42)(df, 0.1)
     miss = missing.quantile(0.75)
 
     print("Clean quantiles")
@@ -272,6 +272,7 @@ def test_mar_max():
     assert missing.isna().sum().sum() == 5, \
         f"Wrong amount expected 5, got {missing.isna().sum().sum()}"
 
+
 def test_mar_warning():
     # should emit warning as missing rate is too high
     df = data()
@@ -282,4 +283,4 @@ def test_mar_warning():
     expected = df.shape[0] * 0.8 * (df.shape[1] - 1)
     assert missing.isna().any().any(), "No Missing values"
     assert missing.isna().sum().sum() == expected, \
-        f"Wrong amount expected {expected }, got {missing.isna().sum().sum()}"
+        f"Wrong amount expected {expected}, got {missing.isna().sum().sum()}"

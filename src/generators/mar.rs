@@ -5,14 +5,13 @@ use ndarray_stats::CorrelationExt;
 use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
-use std::sync::{Arc, mpsc::channel};
-use threadpool::ThreadPool;
+use rayon::prelude::*;
+use std::sync::Arc;
 
 #[pyclass(name = "MAR")]
 pub struct MAR {
     max_missing_per_column: f64,
     rng: StdRng,
-    pool: ThreadPool,
     mode: Mode,
     mean: f64,
     variance: f64,
@@ -21,23 +20,20 @@ pub struct MAR {
 #[pymethods]
 impl MAR {
     #[new]
-    #[pyo3(signature = (mean=None, variance=None, max_missing_per_column=constants::MAX_MISSING_PER_COLUMN, mode="GM", seed=None, n_workers=None))]
+    #[pyo3(signature = (mean=None, variance=None, max_missing_per_column=constants::MAX_MISSING_PER_COLUMN, mode="GM", random_seed=None))]
     fn new(
         mean: Option<f64>,
         variance: Option<f64>,
         max_missing_per_column: f64,
         mode: &str,
-        seed: Option<u64>,
-        n_workers: Option<usize>,
+        random_seed: Option<u64>,
     ) -> MAR {
         let mut r = rand::rng();
-        let seed = seed.unwrap_or(r.random());
+        let seed = random_seed.unwrap_or(r.random());
         let rng = StdRng::seed_from_u64(seed);
-        let pool = ThreadPool::new(n_workers.unwrap_or(constants::N_WORKERS));
         MAR {
             max_missing_per_column,
             rng,
-            pool,
             mode: mode.into(),
             mean: mean.unwrap_or(0.5),
             variance: variance.unwrap_or(0.0),
@@ -106,33 +102,29 @@ impl MAR {
         cols: &[(usize, usize)],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
     ) {
-        let (transmitter, receiver) = channel();
         let samples: Vec<f64> = cols
             .iter()
             .map(|&c| distributions[c.1].sample(&mut self.rng))
             .collect();
-        for (&c, &s) in cols.iter().zip(&samples) {
-            assert!(!s.is_nan(), "Sample is nan");
-            let transmitter = transmitter.clone();
-            let _arr = Arc::clone(&arr);
-            self.pool.execute(move || {
-                let i = _arr
+        let indices: Vec<_> = cols
+            .par_iter()
+            .zip(&samples)
+            .map(|(&c, &s)| {
+                assert!(!s.is_nan(), "Sample is nan");
+                let i = arr
                     .column(c.1)
                     .iter()
                     .enumerate()
-                    .filter(|(i, _)| !_arr[(*i, c.0)].is_nan())
+                    .filter(|(i, _)| !arr[(*i, c.0)].is_nan())
                     .min_by(|(_, a), (_, b)| {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
                     .expect("No argmin found!")
                     .0;
-                transmitter.send((i, c)).unwrap();
-            });
-        }
-        drop(transmitter);
-        self.pool.join();
-        let indices: Vec<_> = receiver.iter().collect();
+                (i, c)
+            })
+            .collect();
         let arr = Arc::get_mut(arr).expect("Err: Multithreading issue detected!");
         for (r, c) in indices {
             arr[(r, c.0)] = f64::NAN;
@@ -205,22 +197,8 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MAR::new(
-            None,
-            None,
-            constants::MAX_MISSING_PER_COLUMN,
-            "GM",
-            None,
-            None,
-        );
-        let _ = MAR::new(
-            None,
-            None,
-            constants::MAX_MISSING_PER_COLUMN,
-            "GM",
-            Some(5),
-            Some(1),
-        );
+        let _ = MAR::new(None, None, constants::MAX_MISSING_PER_COLUMN, "GM", None);
+        let _ = MAR::new(None, None, constants::MAX_MISSING_PER_COLUMN, "GM", Some(5));
     }
     #[test]
     fn correlations() {

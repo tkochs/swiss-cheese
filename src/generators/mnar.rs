@@ -21,11 +21,11 @@ pub struct MNAR {
 #[pymethods]
 impl MNAR {
     #[new]
-    #[pyo3(signature = (mean= None, variance=None, mode="GM", seed=None))]
-    fn new(mean: Option<f64>, variance: Option<f64>, mode: &str, seed: Option<u64>) -> MNAR {
+    #[pyo3(signature = (mean= None, variance=None, mode="GM", random_seed=None))]
+    fn new(mean: Option<f64>, variance: Option<f64>, mode: &str, random_seed: Option<u64>) -> MNAR {
         let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
         let variance = variance.unwrap_or(constants::DEFAULT_VAR);
-        let seed = seed.unwrap_or(
+        let seed = random_seed.unwrap_or(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("Getting time failed")
