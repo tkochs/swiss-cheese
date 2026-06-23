@@ -72,7 +72,6 @@ impl MNAR {
             Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
         };
         let fix = fix(arr.shape(), &mut self.rng);
-        println!("{:?}", fix);
         while missing_count < n_missing {
             let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
             self.drop_cols(arr, &distributions, &cols, cmp, &fix);
@@ -106,14 +105,13 @@ impl MNAR {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
-                    .expect("No argmin found!")
-                    .0;
+                    .map_or(None, |(i, _)| Some(i)); //&format!("No argmin found for {c}!"))
                 (i, c)
             })
             .collect();
         let arr = Arc::get_mut(arr).expect("Still references alive");
-        for (r, c) in indices {
-            arr[(r, c)] = f64::NAN;
+        for (opt, c) in indices {
+            opt.map(|r| arr[(r, c)] = f64::NAN);
         }
     }
 
