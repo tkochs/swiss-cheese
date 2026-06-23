@@ -62,7 +62,7 @@ impl MAR {
     fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
-        let (miss_cols, pairs) = self.pairs(arr, alpha);
+        let (_miss_cols, pairs) = self.pairs(arr, alpha);
         let distributions = utils::get_distribution(self.mean, self.variance, arr.view());
         let cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering = match self.mode {
             Mode::MAX => |a, b, _| a.total_cmp(b),
@@ -70,7 +70,7 @@ impl MAR {
             Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
         };
         while missing_count < n_missing {
-            let cols = select_cols(&mut self.rng, arr, missing_count, n_missing, &miss_cols);
+            // let cols = select_cols(&mut self.rng, arr, missing_count, n_missing, &miss_cols);
             missing_count += self.drop_cols(arr, &distributions, &pairs, cmp);
         }
     }
@@ -175,7 +175,7 @@ impl MAR {
     }
 }
 
-fn select_cols(
+fn _select_cols(
     rng: &mut StdRng,
     arr: &Array2<f64>,
     count: usize,
