@@ -1,5 +1,6 @@
 use ndarray::ArrayView2;
 use rand::prelude::*;
+use rayon::prelude::*;
 
 pub struct Gauss {
     mean: f64,
@@ -34,14 +35,15 @@ pub fn fix(shape: &[usize], rng: &mut StdRng) -> Vec<usize> {
 }
 
 pub fn get_distribution(mean: f64, var: f64, arr: ArrayView2<f64>) -> Vec<Gauss> {
-    let mut dist = Vec::with_capacity(arr.ncols());
-    let mut buff = Vec::with_capacity(arr.nrows());
-    for i in 0..arr.ncols() {
-        let col = arr.column(i);
-        let (local_mean, local_var) = transform(&mut buff, col.iter().copied(), mean, var);
-        dist.push(Gauss::new(local_mean, local_var));
-    }
-    dist
+    (0..arr.ncols())
+        .into_par_iter()
+        .map(|i| {
+            let col = arr.column(i);
+            let mut buff = Vec::with_capacity(arr.nrows());
+            let (local_mean, local_var) = transform(&mut buff, col.iter().copied(), mean, var);
+            Gauss::new(local_mean, local_var)
+        })
+        .collect()
 }
 
 fn transform(

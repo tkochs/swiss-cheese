@@ -9,13 +9,15 @@ class MCAR:
     def __init__(self, random_seed: None | int = None):
         self.seed: int | None = random_seed
 
-    def __call__(self, df: pd.DataFrame, missing_rate: float) -> pd.DataFrame:
+    def __call__(self, df: pd.DataFrame | np.ndarray, missing_rate: float) -> pd.DataFrame | np.ndarray:
         missing_rate = _adjust_missing_rate(df, missing_rate)
         n = df.size
         n_features = df.shape[1]
         n_missing = round(n * missing_rate)
         if n_missing == 0:
             return df
+        if not isinstance(df, pd.DataFrame):
+            df = pd.DataFrame(df)
         df = df.copy()  # .astype(np.float64)
 
         rng = np.random.default_rng(self.seed)
@@ -43,7 +45,7 @@ class MCAR:
         return "MCAR"
 
 
-def _adjust_missing_rate(df: pd.DataFrame, missing_rate: float) -> float:
+def _adjust_missing_rate(df: pd.DataFrame | np.ndarray, missing_rate: float) -> float:
     max = 1.0 - (1.0 / df.shape[1])
     if missing_rate > max:
         warn(

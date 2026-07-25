@@ -1,8 +1,6 @@
-use super::{common::mode::*, constants, utils};
-use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
+use super::{common, common::Generator, common::mode::*, constants, utils};
 use ndarray::Array2;
 use ndarray_stats::CorrelationExt;
-use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -27,17 +25,25 @@ impl MAR {
         max_missing_per_column: f64,
         mode: &str,
         random_seed: Option<u64>,
-    ) -> MAR {
-        let mut r = rand::rng();
-        let seed = random_seed.unwrap_or(r.random());
-        let rng = StdRng::seed_from_u64(seed);
-        MAR {
+    ) -> PyResult<MAR> {
+        let mode: Mode = mode.try_into()?;
+        mode.check_params(&mean, &variance);
+        let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
+        let variance = variance.unwrap_or(constants::DEFAULT_VAR);
+
+        let rng = common::build_rng(random_seed);
+        if let Mode::BLOCK = mode {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                c"Block mode not supported for MAR yet.",
+            ));
+        }
+        Ok(MAR {
             max_missing_per_column,
             rng,
-            mode: mode.into(),
-            mean: mean.unwrap_or(0.5),
-            variance: variance.unwrap_or(0.0),
-        }
+            mode,
+            mean,
+            variance,
+        })
     }
 
     fn __call__<'py>(
@@ -46,11 +52,7 @@ impl MAR {
         data: &Bound<'_, PyAny>,
         missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
-        let mut arr = Arc::new(array);
-        let missing_rate = self._adjust_alpha(py, arr.ncols(), missing_rate);
-        self.drop(&mut arr, missing_rate);
-        arr_to_out(py, &arr, out, enc_info)
+        self.call(py, data, missing_rate)
     }
 
     fn __repr__(&self) -> String {
@@ -58,7 +60,11 @@ impl MAR {
     }
 }
 
-impl MAR {
+impl Generator for MAR {
+    fn max_missing_per_column(&self) -> f64 {
+        self.max_missing_per_column
+    }
+
     fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
@@ -68,13 +74,16 @@ impl MAR {
             Mode::MAX => |a, b, _| a.total_cmp(b),
             Mode::MIN => |a, b, _| b.total_cmp(a),
             Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
+            Mode::BLOCK => panic!("Block mode not supported for MAR yet."),
         };
         while missing_count < n_missing {
             // let cols = select_cols(&mut self.rng, arr, missing_count, n_missing, &miss_cols);
             missing_count += self.drop_cols(arr, &distributions, &pairs, cmp);
         }
     }
+}
 
+impl MAR {
     fn drop_cols(
         &mut self,
         arr: &mut Arc<Array2<f64>>,
@@ -155,23 +164,6 @@ impl MAR {
                 .map(|(a, (_, b))| (*a, b))
                 .collect(),
         )
-    }
-
-    #[inline]
-    fn _adjust_alpha<'py>(&self, py: Python<'py>, n_cols: usize, alpha: f64) -> f64 {
-        let max = self.max_missing_per_column - (self.max_missing_per_column / n_cols as f64);
-        if alpha > max {
-            let msg = std::ffi::CString::new(format!(
-                "Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {}",
-                max
-            ))
-            .unwrap();
-            PyErr::warn(py, &py.get_type::<PyUserWarning>(), &msg, 0)
-                .expect("Something went wrong..");
-            max
-        } else {
-            alpha
-        }
     }
 }
 

@@ -1,11 +1,11 @@
 use super::{
+    common,
+    common::Generator,
     common::mode::*,
     constants,
     utils::{Gauss, fix, get_distribution},
 };
-use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
 use ndarray::Array2;
-use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -15,6 +15,7 @@ use std::sync::Arc;
 pub struct MNAR {
     mean: f64,
     variance: f64,
+    max_missing_per_column: f64,
     mode: Mode,
     rng: StdRng,
 }
@@ -22,24 +23,27 @@ pub struct MNAR {
 #[pymethods]
 impl MNAR {
     #[new]
-    #[pyo3(signature = (mean= None, variance=None, mode="GM", random_seed=None))]
-    fn new(mean: Option<f64>, variance: Option<f64>, mode: &str, random_seed: Option<u64>) -> MNAR {
+    #[pyo3(signature = (mean=None, variance=None, max_missing_per_column=constants::MAX_MISSING_PER_COLUMN, mode="GM", random_seed=None))]
+    fn new(
+        mean: Option<f64>,
+        variance: Option<f64>,
+        max_missing_per_column: f64,
+        mode: &str,
+
+        random_seed: Option<u64>,
+    ) -> PyResult<MNAR> {
+        let mode: Mode = mode.try_into()?;
+        mode.check_params(&mean, &variance);
         let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
         let variance = variance.unwrap_or(constants::DEFAULT_VAR);
-        let seed = random_seed.unwrap_or(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("Getting time failed")
-                .as_nanos() as u64,
-        );
-
-        let rng = StdRng::seed_from_u64(seed);
-        MNAR {
+        let rng = common::build_rng(random_seed);
+        Ok(MNAR {
             mean,
             variance,
-            mode: mode.into(),
+            max_missing_per_column,
+            mode,
             rng,
-        }
+        })
     }
 
     fn __call__<'py>(
@@ -48,20 +52,18 @@ impl MNAR {
         data: &Bound<'_, PyAny>,
         missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
-        let missing_rate = self._adjust_alpha(py, array.ncols(), missing_rate);
-        let mut arr = Arc::new(array);
-
-        self.drop(&mut arr, missing_rate);
-        arr_to_out(py, &arr, out, enc_info)
+        self.call(py, data, missing_rate)
     }
 
     fn __repr__(&self) -> String {
         format!("MNAR[{}]", self.mean)
     }
 }
+impl Generator for MNAR {
+    fn max_missing_per_column(&self) -> f64 {
+        self.max_missing_per_column
+    }
 
-impl MNAR {
     fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
@@ -70,6 +72,7 @@ impl MNAR {
             Mode::MAX => |a, b, _| a.total_cmp(b),
             Mode::MIN => |a, b, _| b.total_cmp(a),
             Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
+            Mode::BLOCK => |a, b, _| a.total_cmp(b),
         };
         let fix = fix(arr.shape(), &mut self.rng);
         while missing_count < n_missing {
@@ -77,7 +80,9 @@ impl MNAR {
             missing_count += self.drop_cols(arr, &distributions, &cols, cmp, &fix);
         }
     }
+}
 
+impl MNAR {
     fn drop_cols(
         &mut self,
         arr: &mut Arc<Array2<f64>>,
@@ -108,7 +113,7 @@ impl MNAR {
                 (i, c)
             })
             .collect();
-        let arr = Arc::get_mut(arr).expect("Still references alive");
+        let arr = Arc::get_mut(arr).expect("Err: Multithreading issue detected!");
         let mut count = 0;
         for (opt, c) in indices {
             opt.map(|r| {
@@ -117,23 +122,6 @@ impl MNAR {
             });
         }
         count
-    }
-
-    #[inline]
-    fn _adjust_alpha<'py>(&self, py: Python<'py>, n_cols: usize, alpha: f64) -> f64 {
-        let max = 1.0 - (1.0 / n_cols as f64);
-        if alpha > max {
-            let msg = std::ffi::CString::new(format!(
-                "Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {}",
-                max
-            ))
-            .unwrap();
-            PyErr::warn(py, &py.get_type::<PyUserWarning>(), &msg, 0)
-                .expect("Something went wrong..");
-            max
-        } else {
-            alpha
-        }
     }
 }
 
@@ -151,7 +139,7 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MNAR::new(None, None, "gm", None);
-        let _ = MNAR::new(Some(0.5), Some(1.0), "gm", None);
+        let _ = MNAR::new(None, None, 0.8, "gm", None);
+        let _ = MNAR::new(Some(0.5), Some(1.0), 0.8, "gm", None);
     }
 }
