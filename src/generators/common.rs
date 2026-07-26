@@ -43,7 +43,16 @@ pub mod mode {
     }
 
     impl Mode {
-        pub fn check_params(&self, mean: &Option<f64>, variance: &Option<f64>) {
+        pub fn check_params(
+            &self,
+            mean: &Option<f64>,
+            variance: &Option<f64>,
+            block_size: &Option<(f64, f64)>,
+        ) {
+            if unsafe { pyo3::ffi::Py_IsInitialized() } == 0 {
+                // only throw pyton warnings if Python if called from python
+                return;
+            }
             if !matches!(self, Mode::GM) {
                 if mean.is_none() || variance.is_none() {
                     pyo3::Python::attach(|py| {
@@ -51,6 +60,19 @@ pub mod mode {
                             py,
                             &py.get_type::<PyUserWarning>(),
                             c"Mean/variance passed without passing a mode that supports it!",
+                            0,
+                        )
+                        .expect("Something went wrong..");
+                    });
+                }
+            }
+            if !matches!(self, Mode::BLOCK) {
+                if block_size.is_none() {
+                    pyo3::Python::attach(|py| {
+                        PyErr::warn(
+                            py,
+                            &py.get_type::<PyUserWarning>(),
+                            c"Block size passed without passing a mode that supports it!",
                             0,
                         )
                         .expect("Something went wrong..");
@@ -92,12 +114,11 @@ pub trait Generator {
         data: &Bound<'_, PyAny>,
         missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
-        let mut arr = Arc::new(array);
+        let (mut arr, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
         let missing_rate = _adjust_alpha(arr.ncols(), missing_rate, self.max_missing_per_column());
         self.drop(&mut arr, missing_rate);
         arr_to_out(py, &arr, out, enc_info)
     }
     fn max_missing_per_column(&self) -> f64;
-    fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64);
+    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64);
 }

@@ -27,7 +27,7 @@ impl MAR {
         random_seed: Option<u64>,
     ) -> PyResult<MAR> {
         let mode: Mode = mode.try_into()?;
-        mode.check_params(&mean, &variance);
+        mode.check_params(&mean, &variance, &None);
         let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
         let variance = variance.unwrap_or(constants::DEFAULT_VAR);
 
@@ -65,7 +65,7 @@ impl Generator for MAR {
         self.max_missing_per_column
     }
 
-    fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
+    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
         let (_miss_cols, pairs) = self.pairs(arr, alpha);
@@ -86,7 +86,7 @@ impl Generator for MAR {
 impl MAR {
     fn drop_cols(
         &mut self,
-        arr: &mut Arc<Array2<f64>>,
+        arr: &mut Array2<f64>,
         distributions: &[utils::Gauss],
         // obs: &HashMap<usize, usize>,
         cols: &[(usize, usize)],
@@ -114,7 +114,6 @@ impl MAR {
                 (i, c)
             })
             .collect();
-        let arr = Arc::get_mut(arr).expect("Err: Multithreading issue detected!");
         let mut count = 0;
         for (opt, c) in indices {
             opt.map(|r| {
@@ -127,7 +126,7 @@ impl MAR {
 
     fn pairs(
         &mut self,
-        arr: &Arc<Array2<f64>>,
+        arr: &Array2<f64>,
         alpha: f64,
     ) -> (
         Vec<usize>, //HashMap<usize, usize>,
