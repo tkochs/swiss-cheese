@@ -14,7 +14,7 @@ use rayon::prelude::*;
 pub struct MNAR {
     mean: f64,
     variance: f64,
-    block_size: Option<(f64, f64)>,
+    block_size: (f64, f64),
     max_missing_per_column: f64,
     mode: Mode,
     rng: StdRng,
@@ -35,6 +35,7 @@ impl MNAR {
     ) -> PyResult<MNAR> {
         let mode: Mode = mode.try_into()?;
         mode.check_params(&mean, &variance, &block_size);
+        let block_size = block_size.unwrap_or(constants::DEFAULT_BLOCK_SIZE);
         let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
         let variance = variance.unwrap_or(constants::DEFAULT_VAR);
         let rng = common::build_rng(random_seed);
@@ -115,10 +116,9 @@ impl MNAR {
         let indices: Vec<_> = cols
             .par_iter()
             .zip(&samples)
-            .map(|(&c, &s)| {
+            .filter_map(|(&c, &s)| {
                 assert!(!s.is_nan(), "Sample is nan");
-                let i = arr
-                    .column(c)
+                arr.column(c)
                     .iter()
                     .enumerate()
                     .filter(|(i, v)| !v.is_nan() && fix[*i] != c)
@@ -126,42 +126,58 @@ impl MNAR {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
-                    .map_or(None, |(i, _)| Some(i)); //&format!("No argmin found for {c}!"))
-                (i, c)
+                    .map(|(i, _)| (i, c)) //&format!("No argmin found for {c}!"))
             })
             .collect();
-        let mut count = 0;
-        for (opt, c) in indices {
-            opt.map(|r| {
-                arr[(r, c)] = f64::NAN;
-                count += 1;
-            });
-        }
-        count
+        common::remove(arr, &indices)
     }
 
     fn drop_pattern(&mut self, arr: &mut Array2<f64>, fix: &[usize]) -> usize {
         let ids = match self.mode {
             Mode::BLOCK => {
-                let (max_width, max_height) = self.block_size.unwrap();
-                let (max_width, max_height) = (
+                let (max_width, max_height) = self.block_size;
+                let (mut max_width, mut max_height) = (
                     (arr.ncols() as f64 * max_width) as usize,
                     (arr.nrows() as f64 * max_height) as usize,
                 );
-                let (x, y, widht, height): (usize, usize, usize, usize) = (
-                    self.rng.random_range(0..arr.ncols()),
-                    self.rng.random_range(0..arr.nrows()),
-                    self.rng.random_range(0..max_width),
-                    self.rng.random_range(0..max_height),
-                );
-                (0..widht).map(|i| (x + i, y))
+                let (mut x, mut y, mut width, mut height);
+                let mut ids;
+                loop {
+                    x = self.rng.random_range(0..arr.ncols());
+                    y = self.rng.random_range(0..arr.nrows());
+                    width = self
+                        .rng
+                        .random_range(1..=max_width.min(arr.ncols() - x).max(1));
+                    height = self
+                        .rng
+                        .random_range(1..=max_height.min(arr.nrows() - y).max(1));
+                    let mut intersect = false;
+                    fix.iter().enumerate().for_each(|(row, &column)| {
+                        if (column >= x && column <= x + width) && (row >= y && row <= y + height) {
+                            intersect = true;
+                        }
+                    });
+
+                    ids = (0..width * height)
+                        .map(|i| {
+                            let (r, c) = (y + i / width, x + i % width);
+                            if arr[(r, c)].is_nan() {
+                                intersect = true;
+                            }
+                            (r, c)
+                        })
+                        .collect();
+                    if !intersect {
+                        break;
+                    }
+                    max_width -= 1;
+                    max_height -= 1;
+                }
+                ids
             }
             _ => panic!("Not a pattern!"),
         };
-        ids.for_each(|(x, y): (usize, usize)| {
-            arr[(x, y)] = f64::NAN;
-        });
-        ids.len()
+        common::remove(arr, &ids)
     }
 }
 

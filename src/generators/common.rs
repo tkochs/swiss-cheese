@@ -1,8 +1,9 @@
-use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
-use ndarray::Array2;
+use crate::utils::{SendPtr, StringEncoding, arr_to_out, pyany_to_vec};
+use ndarray::{Array2, ArrayView2};
 use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
+use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use std::sync::Arc;
 
 pub mod mode {
@@ -54,7 +55,7 @@ pub mod mode {
                 return;
             }
             if !matches!(self, Mode::GM) {
-                if mean.is_none() || variance.is_none() {
+                if mean.is_some() || variance.is_some() {
                     pyo3::Python::attach(|py| {
                         PyErr::warn(
                             py,
@@ -67,7 +68,7 @@ pub mod mode {
                 }
             }
             if !matches!(self, Mode::BLOCK) {
-                if block_size.is_none() {
+                if block_size.is_some() {
                     pyo3::Python::attach(|py| {
                         PyErr::warn(
                             py,
@@ -121,4 +122,17 @@ pub trait Generator {
     }
     fn max_missing_per_column(&self) -> f64;
     fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64);
+}
+
+pub fn remove(arr: &mut Array2<f64>, ids: &Vec<(usize, usize)>) -> usize {
+    let arr_ptr = Arc::new(SendPtr(arr.as_mut_ptr()));
+    println!("{:?}", &ids);
+    let l = ids.len();
+    ids.par_iter().for_each(|(r, c)| {
+        // arr[(x, y)] = f64::NAN;
+        unsafe {
+            *arr_ptr.0.add(r * arr.ncols() + c) = f64::NAN;
+        }
+    });
+    l
 }

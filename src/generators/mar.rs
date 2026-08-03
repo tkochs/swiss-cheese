@@ -99,10 +99,9 @@ impl MAR {
         let indices: Vec<_> = cols
             .par_iter()
             .zip(&samples)
-            .map(|(&c, &s)| {
+            .filter_map(|(&c, &s)| {
                 assert!(!s.is_nan(), "Sample is nan");
-                let i = arr
-                    .column(c.1)
+                arr.column(c.1)
                     .iter()
                     .enumerate()
                     .filter(|(i, _)| !arr[(*i, c.0)].is_nan())
@@ -110,18 +109,10 @@ impl MAR {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
-                    .map_or(None, |(i, _)| Some(i));
-                (i, c)
+                    .map(|(i, _)| (i, c.0))
             })
             .collect();
-        let mut count = 0;
-        for (opt, c) in indices {
-            opt.map(|r| {
-                arr[(r, c.0)] = f64::NAN;
-                count += 1;
-            });
-        }
-        count
+        common::remove(arr, &indices)
     }
 
     fn pairs(

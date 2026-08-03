@@ -78,7 +78,7 @@ def test_mcar_error():
 def test_mnar_warn():
     with pytest.warns(UserWarning):
         df = data()
-        missing = MNAR()(df, 1.0)
+        missing = MNAR(max_missing_per_column=1.0)(df, 1.0)
     n_miss = missing.isna().sum().sum()
     print(missing)
     print(n_miss)
@@ -278,3 +278,11 @@ def test_mar_warning():
     assert missing.isna().any().any(), "No Missing values"
     assert missing.isna().sum().sum() == expected, \
         f"Wrong amount expected {expected}, got {missing.isna().sum().sum()}"
+
+
+def test_block():
+    df = data()
+    missing = MNAR(mode="block", random_seed=42)(df, 0.1)
+    assert missing.isna().any().any(), "No Missing values"
+    assert missing.isna().sum().sum() == 5, \
+        f"Wrong amount expected 5, got {missing.isna().sum().sum()}"

@@ -2,7 +2,6 @@ use ndarray::{Array2, ArrayView2};
 use numpy::{PyArrayMethods, ToPyArray};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyDict, PyString};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 const SUPPORTED_TYPES: &str = "numpy.ndarray, pandas.DataFrame";
@@ -18,7 +17,7 @@ pub struct EncodingInfo {
     pub reverse_maps: HashMap<usize, HashMap<u64, String>>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug)]
 pub enum StringEncoding {
     LabelEncoding,
 }

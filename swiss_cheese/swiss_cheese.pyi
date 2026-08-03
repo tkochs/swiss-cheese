@@ -15,6 +15,7 @@ class MNAR:
         mean: float | None = None,
         variance: float | None = None,
         mode: str = "GM",
+        max_missing_per_column: float = 0.8,
         random_seed: int | None = None,
     ) -> None:
         ...
@@ -30,6 +31,7 @@ class MAR:
         variance: float | None = None,
         mode: str = "GM",
         random_seed: int | None = None,
+        max_missing_per_column: float = 0.8,
     ) -> None:
         ...
 
