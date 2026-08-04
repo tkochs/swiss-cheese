@@ -3,7 +3,7 @@ use super::{
     common::Generator,
     common::mode::*,
     constants,
-    utils::{Gauss, fix, get_distribution},
+    utils::{Gauss, get_distribution},
 };
 use ndarray::Array2;
 use pyo3::prelude::*;
@@ -12,9 +12,6 @@ use rayon::prelude::*;
 
 #[pyclass(name = "MNAR")]
 pub struct MNAR {
-    mean: f64,
-    variance: f64,
-    block_size: (f64, f64),
     max_missing_per_column: f64,
     mode: Mode,
     rng: StdRng,
@@ -23,26 +20,20 @@ pub struct MNAR {
 #[pymethods]
 impl MNAR {
     #[new]
-    #[pyo3(signature = (mean=None, variance=None, block_size=None, max_missing_per_column=constants::MAX_MISSING_PER_COLUMN, mode="GM", random_seed=None))]
+    #[pyo3(signature = (mean=None, variance=None, block_size=None, n_blobs=None, max_missing_per_column=constants::MAX_MISSING_PER_COLUMN, mode="GM", random_seed=None))]
     fn new(
         mean: Option<f64>,
         variance: Option<f64>,
         block_size: Option<(f64, f64)>,
+        n_blobs: Option<usize>,
         max_missing_per_column: f64,
         mode: &str,
 
         random_seed: Option<u64>,
     ) -> PyResult<MNAR> {
-        let mode: Mode = mode.try_into()?;
-        mode.check_params(&mean, &variance, &block_size);
-        let block_size = block_size.unwrap_or(constants::DEFAULT_BLOCK_SIZE);
-        let mean = mean.unwrap_or(constants::DEFAULT_MEAN);
-        let variance = variance.unwrap_or(constants::DEFAULT_VAR);
+        let mode: Mode = Mode::new(mode, mean, variance, block_size, n_blobs)?;
         let rng = common::build_rng(random_seed);
         Ok(MNAR {
-            mean,
-            variance,
-            block_size,
             max_missing_per_column,
             mode,
             rng,
@@ -59,7 +50,13 @@ impl MNAR {
     }
 
     fn __repr__(&self) -> String {
-        format!("MNAR[{}]", self.mean)
+        match self.mode {
+            Mode::GM(mean, _) => format!("MNAR[{}]", mean),
+            Mode::MIN => format!("MNAR[MAX]"),
+            Mode::MAX => format!("MNAR[MIN]"),
+            Mode::BLOCK(size) => format!("MNAR[({}, {})]", size.0, size.1),
+            Mode::BLOB(n) => format!("MNAR[{}]", n),
+        }
     }
 }
 impl Generator for MNAR {
@@ -70,30 +67,35 @@ impl Generator for MNAR {
     fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
-        let distributions = get_distribution(self.mean, self.variance, arr.view());
-        let cmp: Option<fn(&f64, &f64, &f64) -> std::cmp::Ordering> = match self.mode {
-            Mode::MAX => Some(|a, b, _| a.total_cmp(b)),
-            Mode::MIN => Some(|a, b, _| b.total_cmp(a)),
-            Mode::GM => Some(|a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))),
-            Mode::BLOCK => None,
+        let (distributions, cmp): (
+            Option<Vec<Gauss>>,
+            Option<fn(&f64, &f64, &f64) -> std::cmp::Ordering>,
+        ) = match self.mode {
+            Mode::MAX => (None, Some(|a, b, _| a.total_cmp(b))),
+            Mode::MIN => (None, Some(|a, b, _| b.total_cmp(a))),
+            Mode::GM(mean, variance) => (
+                Some(get_distribution(mean, variance, arr.view())),
+                Some(|a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))),
+            ),
+            Mode::BLOCK(_) => (None, None),
+            Mode::BLOB(_) => (None, None),
         };
-        let fix = fix(arr.shape(), &mut self.rng);
+        let fix = common::fix(arr.shape(), &mut self.rng, &self.mode);
         match self.mode {
-            Mode::GM | Mode::MAX | Mode::MIN => {
+            Mode::GM(_, _) | Mode::MAX | Mode::MIN => {
+                let cmp = cmp.expect(&format!(
+                    "Cmp function required for this mode: [{}]",
+                    self.mode.as_str()
+                ));
+                let distributions = distributions.unwrap_or_default();
                 while missing_count < n_missing {
                     let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
-                    missing_count += self.drop_cols(
-                        arr,
-                        &distributions,
-                        &cols,
-                        cmp.expect("Called wrong drop function!"),
-                        &fix,
-                    );
+                    missing_count += self.drop_cols(arr, &distributions, &cols, cmp, &fix);
                 }
             }
-            Mode::BLOCK => {
+            Mode::BLOCK(_) | Mode::BLOB(_) => {
                 while missing_count < n_missing {
-                    missing_count += self.drop_pattern(arr, &fix);
+                    missing_count += self.drop_pattern(arr, &fix, n_missing - missing_count);
                 }
             }
         }
@@ -111,7 +113,7 @@ impl MNAR {
     ) -> usize {
         let samples: Vec<f64> = cols
             .iter()
-            .map(|&c| distributions[c].sample(&mut self.rng))
+            .map(|&c| unsafe { distributions.get_unchecked(c).sample(&mut self.rng) })
             .collect();
         let indices: Vec<_> = cols
             .par_iter()
@@ -121,7 +123,7 @@ impl MNAR {
                 arr.column(c)
                     .iter()
                     .enumerate()
-                    .filter(|(i, v)| !v.is_nan() && fix[*i] != c)
+                    .filter(|(i, v)| !v.is_nan() && unsafe { *fix.get_unchecked(*i) != c })
                     .min_by(|(_, a), (_, b)| {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
@@ -132,10 +134,10 @@ impl MNAR {
         common::remove(arr, &indices)
     }
 
-    fn drop_pattern(&mut self, arr: &mut Array2<f64>, fix: &[usize]) -> usize {
+    fn drop_pattern(&mut self, arr: &mut Array2<f64>, fix: &[usize], nmiss: usize) -> usize {
         let ids = match self.mode {
-            Mode::BLOCK => {
-                let (max_width, max_height) = self.block_size;
+            Mode::BLOCK(block_size) => {
+                let (max_width, max_height) = block_size;
                 let (mut max_width, mut max_height) = (
                     (arr.ncols() as f64 * max_width) as usize,
                     (arr.nrows() as f64 * max_height) as usize,
@@ -153,15 +155,18 @@ impl MNAR {
                         .random_range(1..=max_height.min(arr.nrows() - y).max(1));
                     let mut intersect = false;
                     fix.iter().enumerate().for_each(|(row, &column)| {
-                        if (column >= x && column <= x + width) && (row >= y && row <= y + height) {
+                        if (column >= x && column < x + width) && (row >= y && row < y + height) {
                             intersect = true;
                         }
                     });
 
+                    if width * height > nmiss {
+                        continue;
+                    }
                     ids = (0..width * height)
                         .map(|i| {
                             let (r, c) = (y + i / width, x + i % width);
-                            if arr[(r, c)].is_nan() {
+                            if unsafe { arr.uget((r, c)).is_nan() } {
                                 intersect = true;
                             }
                             (r, c)
@@ -195,7 +200,7 @@ mod test {
 
     #[test]
     fn create() {
-        let _ = MNAR::new(None, None, None, 0.8, "gm", None);
-        let _ = MNAR::new(Some(0.5), Some(1.0), None, 0.8, "gm", None);
+        let _ = MNAR::new(None, None, None, None, 0.8, "gm", None);
+        let _ = MNAR::new(Some(0.5), Some(1.0), None, None, 0.8, "gm", None);
     }
 }

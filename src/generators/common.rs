@@ -1,40 +1,58 @@
-use crate::utils::{SendPtr, StringEncoding, arr_to_out, pyany_to_vec};
-use ndarray::{Array2, ArrayView2};
+use crate::{
+    generators::common::mode::Mode,
+    generators::constants,
+    utils::{SendPtr, StringEncoding, arr_to_out, pyany_to_vec},
+};
+use ndarray::Array2;
 use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
-use rayon::iter::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::sync::Arc;
 
 pub mod mode {
     use super::*;
     pub enum Mode {
-        GM,
+        GM(f64, f64),
         MAX,
         MIN,
-        BLOCK,
+        BLOCK((f64, f64)),
+        BLOB(usize),
     }
     pub enum Error {
         UnknownMode(String),
     }
-    pub const ALLOWED_MODES: &[&str] = &["GM", "MAX", "MIN", "BLOCK"];
+    pub const ALLOWED_MODES: &[&str] = &["GM", "MAX", "MIN", "BLOCK", "BLOB"];
 
-    impl TryInto<Mode> for &str {
-        type Error = self::Error;
-
-        fn try_into(self) -> Result<Mode, Self::Error> {
-            match self.to_lowercase().as_str() {
-                "gm" => Ok(Mode::GM),
-                "max" => Ok(Mode::MAX),
-                "min" => Ok(Mode::MIN),
-                "block" => Ok(Mode::BLOCK),
-                _ => Err(Error::UnknownMode(format!(
-                    "Unknown mode parameter: {} (Alloed: {:?})",
-                    self, ALLOWED_MODES
-                ))),
+    impl Into<&str> for &Mode {
+        fn into(self) -> &'static str {
+            match self {
+                Mode::GM(_, _) => "GM",
+                Mode::MAX => "MAX",
+                Mode::MIN => "MIN",
+                Mode::BLOCK(_) => "BLOCK",
+                Mode::BLOB(_) => "BLOB",
             }
         }
     }
+
+    // impl TryInto<Mode> for &str {
+    //     type Error = self::Error;
+    //
+    //     fn try_into(self) -> Result<Mode, Self::Error> {
+    //         match self.to_lowercase().as_str() {
+    //             "gm" => Ok(Mode::GM),
+    //             "max" => Ok(Mode::MAX),
+    //             "min" => Ok(Mode::MIN),
+    //             "block" => Ok(Mode::BLOCK),
+    //             "blob" => Ok(Mode::BLOB),
+    //             _ => Err(Error::UnknownMode(format!(
+    //                 "Unknown mode parameter: {} (Alloed: {:?})",
+    //                 self, ALLOWED_MODES
+    //             ))),
+    //         }
+    //     }
+    // }
     impl From<Error> for pyo3::PyErr {
         fn from(err: Error) -> pyo3::PyErr {
             match err {
@@ -44,17 +62,44 @@ pub mod mode {
     }
 
     impl Mode {
+        pub fn new(
+            value: &str,
+            mean: Option<f64>,
+            variance: Option<f64>,
+            block_size: Option<(f64, f64)>,
+            n_blobs: Option<usize>,
+        ) -> Result<Self, Error> {
+            let mode = match value.to_lowercase().as_str() {
+                "gm" => Mode::GM(
+                    mean.unwrap_or(constants::DEFAULT_MEAN),
+                    variance.unwrap_or(constants::DEFAULT_VAR),
+                ),
+                "max" => Mode::MAX,
+                "min" => Mode::MIN,
+                "block" => Mode::BLOCK(block_size.unwrap_or(constants::DEFAULT_BLOCK_SIZE)),
+                "blob" => Mode::BLOB(n_blobs.unwrap_or(constants::DEFAULT_BLOBS)),
+                _ => {
+                    return Err(Error::UnknownMode(format!(
+                        "Unknown mode parameter: {} (Alloed: {:?})",
+                        value, ALLOWED_MODES
+                    )));
+                }
+            };
+            mode.check_params(&mean, &variance, &block_size, &n_blobs);
+            Ok(mode)
+        }
         pub fn check_params(
             &self,
             mean: &Option<f64>,
             variance: &Option<f64>,
             block_size: &Option<(f64, f64)>,
+            n_blobs: &Option<usize>,
         ) {
             if unsafe { pyo3::ffi::Py_IsInitialized() } == 0 {
                 // only throw pyton warnings if Python if called from python
                 return;
             }
-            if !matches!(self, Mode::GM) {
+            if !matches!(self, Mode::GM(_, _)) {
                 if mean.is_some() || variance.is_some() {
                     pyo3::Python::attach(|py| {
                         PyErr::warn(
@@ -67,7 +112,7 @@ pub mod mode {
                     });
                 }
             }
-            if !matches!(self, Mode::BLOCK) {
+            if !matches!(self, Mode::BLOCK(_)) {
                 if block_size.is_some() {
                     pyo3::Python::attach(|py| {
                         PyErr::warn(
@@ -80,6 +125,23 @@ pub mod mode {
                     });
                 }
             }
+            if !matches!(self, Mode::BLOB(_)) {
+                if n_blobs.is_some() {
+                    pyo3::Python::attach(|py| {
+                        PyErr::warn(
+                            py,
+                            &py.get_type::<PyUserWarning>(),
+                            c"Number of Blobs passed without passing a mode that supports it!",
+                            0,
+                        )
+                        .expect("Something went wrong..");
+                    });
+                }
+            }
+        }
+
+        pub fn as_str(&self) -> &str {
+            self.into()
         }
     }
 }
@@ -135,4 +197,20 @@ pub fn remove(arr: &mut Array2<f64>, ids: &Vec<(usize, usize)>) -> usize {
         }
     });
     l
+}
+
+pub fn fix(shape: &[usize], rng: &mut StdRng, mode: &Mode) -> Vec<usize> {
+    let &[rows, cols, ..] = shape else {
+        panic!("fix() needs at least [rows, cols]");
+    };
+    match mode {
+        Mode::BLOCK(_) => {
+            let col = rng.random_range(0..cols);
+            (0..rows).into_iter().map(|_| col).collect()
+        }
+        _ => (0..rows)
+            .into_iter()
+            .map(|_| rng.random_range(0..cols))
+            .collect(),
+    }
 }

@@ -24,15 +24,6 @@ impl Gauss {
         self.mean + self.var * z
     }
 }
-pub fn fix(shape: &[usize], rng: &mut StdRng) -> Vec<usize> {
-    let &[rows, cols, ..] = shape else {
-        panic!("fix() needs at least [rows, cols]");
-    };
-    (0..rows)
-        .into_iter()
-        .map(|_| rng.random_range(0..cols))
-        .collect()
-}
 
 pub fn get_distribution(mean: f64, var: f64, arr: ArrayView2<f64>) -> Vec<Gauss> {
     (0..arr.ncols())
