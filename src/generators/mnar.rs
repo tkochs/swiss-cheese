@@ -1,5 +1,3 @@
-use crate::generators::utils::get_samples;
-
 use super::{
     common,
     common::Generator,
@@ -7,6 +5,7 @@ use super::{
     constants,
     utils::{Gauss, get_distribution},
 };
+use crate::generators::utils::get_samples;
 use ndarray::Array2;
 use pyo3::prelude::*;
 use rand::prelude::*;
