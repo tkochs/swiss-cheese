@@ -13,10 +13,10 @@ use std::sync::Arc;
 pub mod mode {
     use super::*;
     pub enum Mode {
-        GM(f64, f64),
+        GM { mean: f64, var: f64 },
         MAX,
         MIN,
-        BLOCK((f64, f64)),
+        BLOCK { max_width: f64, max_height: f64 },
         BLOB(usize),
     }
     pub enum Error {
@@ -27,10 +27,10 @@ pub mod mode {
     impl Into<&str> for &Mode {
         fn into(self) -> &'static str {
             match self {
-                Mode::GM(_, _) => "GM",
+                Mode::GM { .. } => "GM",
                 Mode::MAX => "MAX",
                 Mode::MIN => "MIN",
-                Mode::BLOCK(_) => "BLOCK",
+                Mode::BLOCK { .. } => "BLOCK",
                 Mode::BLOB(_) => "BLOB",
             }
         }
@@ -70,13 +70,20 @@ pub mod mode {
             n_blobs: Option<usize>,
         ) -> Result<Self, Error> {
             let mode = match value.to_lowercase().as_str() {
-                "gm" => Mode::GM(
-                    mean.unwrap_or(constants::DEFAULT_MEAN),
-                    variance.unwrap_or(constants::DEFAULT_VAR),
-                ),
+                "gm" => Mode::GM {
+                    mean: mean.unwrap_or(constants::DEFAULT_MEAN),
+                    var: variance.unwrap_or(constants::DEFAULT_VAR),
+                },
                 "max" => Mode::MAX,
                 "min" => Mode::MIN,
-                "block" => Mode::BLOCK(block_size.unwrap_or(constants::DEFAULT_BLOCK_SIZE)),
+                "block" => {
+                    let (max_width, max_height) =
+                        block_size.unwrap_or(constants::DEFAULT_BLOCK_SIZE);
+                    Mode::BLOCK {
+                        max_width,
+                        max_height,
+                    }
+                }
                 "blob" => Mode::BLOB(n_blobs.unwrap_or(constants::DEFAULT_BLOBS)),
                 _ => {
                     return Err(Error::UnknownMode(format!(
@@ -99,7 +106,7 @@ pub mod mode {
                 // only throw pyton warnings if Python if called from python
                 return;
             }
-            if !matches!(self, Mode::GM(_, _)) {
+            if !matches!(self, Mode::GM { .. }) {
                 if mean.is_some() || variance.is_some() {
                     pyo3::Python::attach(|py| {
                         PyErr::warn(
@@ -112,7 +119,7 @@ pub mod mode {
                     });
                 }
             }
-            if !matches!(self, Mode::BLOCK(_)) {
+            if !matches!(self, Mode::BLOCK { .. }) {
                 if block_size.is_some() {
                     pyo3::Python::attach(|py| {
                         PyErr::warn(
@@ -188,7 +195,6 @@ pub trait Generator {
 
 pub fn remove(arr: &mut Array2<f64>, ids: &Vec<(usize, usize)>) -> usize {
     let arr_ptr = Arc::new(SendPtr(arr.as_mut_ptr()));
-    println!("{:?}", &ids);
     let l = ids.len();
     ids.par_iter().for_each(|(r, c)| {
         // arr[(x, y)] = f64::NAN;
@@ -204,7 +210,7 @@ pub fn fix(shape: &[usize], rng: &mut StdRng, mode: &Mode) -> Vec<usize> {
         panic!("fix() needs at least [rows, cols]");
     };
     match mode {
-        Mode::BLOCK(_) => {
+        Mode::BLOCK { .. } => {
             let col = rng.random_range(0..cols);
             (0..rows).into_iter().map(|_| col).collect()
         }

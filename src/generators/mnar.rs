@@ -1,3 +1,5 @@
+use crate::generators::utils::get_samples;
+
 use super::{
     common,
     common::Generator,
@@ -51,10 +53,13 @@ impl MNAR {
 
     fn __repr__(&self) -> String {
         match self.mode {
-            Mode::GM(mean, _) => format!("MNAR[{}]", mean),
-            Mode::MIN => format!("MNAR[MAX]"),
-            Mode::MAX => format!("MNAR[MIN]"),
-            Mode::BLOCK(size) => format!("MNAR[({}, {})]", size.0, size.1),
+            Mode::GM { mean, .. } => format!("MNAR[{}]", mean),
+            Mode::MIN => format!("MNAR[MIN]"),
+            Mode::MAX => format!("MNAR[MAX]"),
+            Mode::BLOCK {
+                max_width,
+                max_height,
+            } => format!("MNAR[({}, {})]", max_width, max_height),
             Mode::BLOB(n) => format!("MNAR[{}]", n),
         }
     }
@@ -73,27 +78,27 @@ impl Generator for MNAR {
         ) = match self.mode {
             Mode::MAX => (None, Some(|a, b, _| a.total_cmp(b))),
             Mode::MIN => (None, Some(|a, b, _| b.total_cmp(a))),
-            Mode::GM(mean, variance) => (
-                Some(get_distribution(mean, variance, arr.view())),
+            Mode::GM { mean, var } => (
+                Some(get_distribution(mean, var, arr.view())),
                 Some(|a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))),
             ),
-            Mode::BLOCK(_) => (None, None),
+            Mode::BLOCK { .. } => (None, None),
             Mode::BLOB(_) => (None, None),
         };
         let fix = common::fix(arr.shape(), &mut self.rng, &self.mode);
         match self.mode {
-            Mode::GM(_, _) | Mode::MAX | Mode::MIN => {
+            Mode::GM { .. } | Mode::MAX | Mode::MIN => {
                 let cmp = cmp.expect(&format!(
                     "Cmp function required for this mode: [{}]",
                     self.mode.as_str()
                 ));
-                let distributions = distributions.unwrap_or_default();
                 while missing_count < n_missing {
                     let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
-                    missing_count += self.drop_cols(arr, &distributions, &cols, cmp, &fix);
+                    let samples = get_samples(&distributions, &cols, &mut self.rng);
+                    missing_count += self.drop_cols(arr, &samples, &cols, cmp, &fix);
                 }
             }
-            Mode::BLOCK(_) | Mode::BLOB(_) => {
+            Mode::BLOCK { .. } | Mode::BLOB(_) => {
                 while missing_count < n_missing {
                     missing_count += self.drop_pattern(arr, &fix, n_missing - missing_count);
                 }
@@ -106,26 +111,22 @@ impl MNAR {
     fn drop_cols(
         &mut self,
         arr: &mut Array2<f64>,
-        distributions: &[Gauss],
+        samples: &[f64],
         cols: &[usize],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
         fix: &[usize],
     ) -> usize {
-        let samples: Vec<f64> = cols
-            .iter()
-            .map(|&c| unsafe { distributions.get_unchecked(c).sample(&mut self.rng) })
-            .collect();
         let indices: Vec<_> = cols
             .par_iter()
-            .zip(&samples)
-            .filter_map(|(&c, &s)| {
+            .zip(samples)
+            .filter_map(|(&c, s)| {
                 assert!(!s.is_nan(), "Sample is nan");
                 arr.column(c)
                     .iter()
                     .enumerate()
                     .filter(|(i, v)| !v.is_nan() && unsafe { *fix.get_unchecked(*i) != c })
                     .min_by(|(_, a), (_, b)| {
-                        cmp(*a, *b, &s)
+                        cmp(*a, *b, s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
                     .map(|(i, _)| (i, c)) //&format!("No argmin found for {c}!"))
@@ -136,8 +137,10 @@ impl MNAR {
 
     fn drop_pattern(&mut self, arr: &mut Array2<f64>, fix: &[usize], nmiss: usize) -> usize {
         let ids = match self.mode {
-            Mode::BLOCK(block_size) => {
-                let (max_width, max_height) = block_size;
+            Mode::BLOCK {
+                max_width,
+                max_height,
+            } => {
                 let (mut max_width, mut max_height) = (
                     (arr.ncols() as f64 * max_width) as usize,
                     (arr.nrows() as f64 * max_height) as usize,

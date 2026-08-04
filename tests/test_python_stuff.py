@@ -8,4 +8,4 @@ def test_name_mnar():
 
 def test_name_mar():
     m = MAR()
-    assert str(m) == "MAR"
+    assert str(m) == "MAR[0.5]"

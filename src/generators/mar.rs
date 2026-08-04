@@ -26,7 +26,7 @@ impl MAR {
     ) -> PyResult<MAR> {
         let mode: Mode = Mode::new(mode, mean, variance, None, None)?;
         let rng = common::build_rng(random_seed);
-        if let Mode::BLOCK(_) | Mode::BLOB(_) = mode {
+        if let Mode::BLOCK { .. } | Mode::BLOB(_) = mode {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
                 "Mode {} not supported for MAR yet.",
                 mode.as_str(),
@@ -49,7 +49,12 @@ impl MAR {
     }
 
     fn __repr__(&self) -> String {
-        format!("MAR")
+        match self.mode {
+            Mode::GM { mean, .. } => format!("MAR[{}]", mean),
+            Mode::MIN => format!("MAR[MIN]"),
+            Mode::MAX => format!("MAR[MAX]"),
+            _ => panic!("No valid mode passed during construction!"),
+        }
     }
 }
 
@@ -61,21 +66,24 @@ impl Generator for MAR {
     fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
-        let (_miss_cols, pairs) = self.pairs(arr, alpha);
-        let (distributions, cmp): (Vec<Gauss>, fn(&f64, &f64, &f64) -> std::cmp::Ordering) =
-            match self.mode {
-                Mode::MAX => (Vec::new(), |a, b, _| a.total_cmp(b)),
-                Mode::MIN => (Vec::new(), |a, b, _| b.total_cmp(a)),
-                Mode::GM(mean, var) => (get_distribution(mean, var, arr.view()), |a, b, s| {
-                    ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
-                }),
-                Mode::BLOCK(_) | Mode::BLOB(_) => {
-                    panic!("Mode {} not supported for MAR yet.", self.mode.as_str())
-                }
-            };
+        let (miss_cols, pairs) = self.pairs(arr, alpha);
+        let (distributions, cmp): (
+            Option<Vec<Gauss>>,
+            fn(&f64, &f64, &f64) -> std::cmp::Ordering,
+        ) = match self.mode {
+            Mode::MAX => (None, |a, b, _| a.total_cmp(b)),
+            Mode::MIN => (None, |a, b, _| b.total_cmp(a)),
+            Mode::GM { mean, var } => (Some(get_distribution(mean, var, arr.view())), |a, b, s| {
+                ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
+            }),
+            Mode::BLOCK { .. } | Mode::BLOB(_) => {
+                panic!("Mode {} not supported for MAR yet.", self.mode.as_str())
+            }
+        };
         while missing_count < n_missing {
-            // let cols = select_cols(&mut self.rng, arr, missing_count, n_missing, &miss_cols);
-            missing_count += self.drop_cols(arr, &distributions, &pairs, cmp);
+            let max_miss = (n_missing - missing_count).min(miss_cols.len());
+            let samples = utils::get_samples(&distributions, &miss_cols, &mut self.rng);
+            missing_count += self.drop_cols(arr, &samples[..max_miss], &pairs, cmp);
         }
     }
 }
@@ -84,18 +92,14 @@ impl MAR {
     fn drop_cols(
         &mut self,
         arr: &mut Array2<f64>,
-        distributions: &[utils::Gauss],
+        samples: &[f64],
         // obs: &HashMap<usize, usize>,
         cols: &[(usize, usize)],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
     ) -> usize {
-        let samples: Vec<f64> = cols
-            .iter()
-            .map(|&c| distributions[c.1].sample(&mut self.rng))
-            .collect();
         let indices: Vec<_> = cols
             .par_iter()
-            .zip(&samples)
+            .zip(samples)
             .filter_map(|(&c, &s)| {
                 assert!(!s.is_nan(), "Sample is nan");
                 arr.column(c.1)

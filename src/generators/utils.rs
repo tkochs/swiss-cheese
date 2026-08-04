@@ -2,6 +2,7 @@ use ndarray::ArrayView2;
 use rand::prelude::*;
 use rayon::prelude::*;
 
+#[derive(Debug)]
 pub struct Gauss {
     mean: f64,
     var: f64,
@@ -35,6 +36,18 @@ pub fn get_distribution(mean: f64, var: f64, arr: ArrayView2<f64>) -> Vec<Gauss>
             Gauss::new(local_mean, local_var)
         })
         .collect()
+}
+
+pub fn get_samples(
+    distributions: &Option<Vec<Gauss>>,
+    cols: &Vec<usize>,
+    rng: &mut StdRng,
+) -> Vec<f64> {
+    if let Some(dists) = distributions {
+        cols.iter().map(|&c| dists[c].sample(rng)).collect()
+    } else {
+        vec![0.0; cols.len()]
+    }
 }
 
 fn transform(
