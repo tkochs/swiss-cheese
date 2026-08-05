@@ -6,9 +6,10 @@ import pytest
 
 ALL_GENERATORS = [
     MCAR(),
-    MNAR(0.75,0.01),
-    MAR(0.75,0.01),
+    MNAR(0.75, 0.01),
+    MAR(0.75, 0.01),
     MNAR(mode="block"),
+    MNAR(mode="blob"),
 ]
 
 
@@ -56,7 +57,8 @@ def test_n_misisng(generator):
     cols_all_nan = missing.isna().all(axis=0).sum()
     assert rows_all_nan == 0, "Some rows are fully NaN"
     assert cols_all_nan == 0, "Some columns are fully NaN"
-    assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n), f"{generator} produces wrong n missing expected: {0.5}, actual: {missing.isna().sum().sum() / n}"
+    assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n), f"{
+        generator} produces wrong n missing expected: {0.5}, actual: {missing.isna().sum().sum() / n}"
 
 
 @pytest.mark.parametrize("generator", ALL_GENERATORS)
@@ -151,22 +153,13 @@ def test_mnar_var():
 
 
 @pytest.mark.parametrize("generator", ALL_GENERATORS)
-def test_alpha(generator):
+@pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
+def test_alpha(generator, alpha):
     df = data()
-    missing = generator(df, 0.1)
+    missing = generator(df, alpha)
     print(missing)
     print(df.min())
-    assert missing.isna().sum().sum() == 5
-
-    missing = generator(df, 0.2)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 10
-
-    missing = generator(df, 0.15)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 8
+    assert missing.isna().sum().sum() == np.ceil(df.size*alpha)
     assert not df.isna().any().any(), "introduced missing in original data"
 
 
@@ -243,4 +236,3 @@ def test_mar_warning():
     assert missing.isna().any().any(), "No Missing values"
     assert missing.isna().sum().sum() == expected, \
         f"Wrong amount expected {expected}, got {missing.isna().sum().sum()}"
-

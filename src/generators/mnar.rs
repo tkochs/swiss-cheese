@@ -6,6 +6,7 @@ use super::{
     utils::{Gauss, get_distribution},
 };
 use crate::generators::utils::get_samples;
+use itertools::Itertools;
 use ndarray::Array2;
 use pyo3::prelude::*;
 use rand::prelude::*;
@@ -58,8 +59,8 @@ impl MNAR {
             Mode::BLOCK {
                 max_width,
                 max_height,
-            } => format!("MNAR[({}, {})]", max_width, max_height),
-            Mode::BLOB(n) => format!("MNAR[{}]", n),
+            } => format!("MNAR[Blocks({}, {})]", max_width, max_height),
+            Mode::BLOB(n) => format!("MNAR[Blobs{}]", n),
         }
     }
 }
@@ -181,6 +182,36 @@ impl MNAR {
                     max_height -= 1;
                 }
                 ids
+            }
+            Mode::BLOB(n) => {
+                let mut centers = Vec::with_capacity(n);
+                let mut n_per_center = Vec::with_capacity(n);
+                let mut nmiss = nmiss;
+                for i in 0..n {
+                    centers.push((
+                        self.rng.random_range(0..arr.ncols()),
+                        self.rng.random_range(0..arr.nrows()),
+                    ));
+                    n_per_center.push(self.rng.random_range(0..=nmiss.max(1)));
+                    nmiss = nmiss.saturating_sub(n_per_center[i]);
+                }
+                (0..nmiss)
+                    .into_iter()
+                    .map(|_| {
+                        let (x, y) = centers[self.rng.random_range(0..centers.len())];
+                        let sigma = 10.0;
+                        let gx = Gauss::new(x as f64, sigma);
+                        let gy = Gauss::new(y as f64, sigma);
+                        (
+                            gx.sample(&mut self.rng)
+                                .clamp(0.0, arr.ncols() as f64 - 1.0)
+                                as usize,
+                            gy.sample(&mut self.rng)
+                                .clamp(0.0, arr.nrows() as f64 - 1.0)
+                                as usize,
+                        )
+                    })
+                    .collect()
             }
             _ => panic!("Not a pattern!"),
         };
