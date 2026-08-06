@@ -1,3 +1,5 @@
+use core::f64;
+
 use super::{
     common,
     common::Generator,
@@ -6,11 +8,10 @@ use super::{
     utils::{Gauss, get_distribution},
 };
 use crate::generators::utils::get_samples;
-use itertools::Itertools;
 use ndarray::Array2;
 use pyo3::prelude::*;
 use rand::prelude::*;
-use rayon::prelude::*;
+use rayon::{iter::Enumerate, prelude::*};
 
 #[pyclass(name = "MNAR")]
 pub struct MNAR {
@@ -60,7 +61,7 @@ impl MNAR {
                 max_width,
                 max_height,
             } => format!("MNAR[Blocks({}, {})]", max_width, max_height),
-            Mode::BLOB(n) => format!("MNAR[Blobs{}]", n),
+            Mode::BLOB(n) => format!("MNAR[Blobs({})]", n),
         }
     }
 }
@@ -192,29 +193,45 @@ impl MNAR {
                         self.rng.random_range(0..arr.ncols()),
                         self.rng.random_range(0..arr.nrows()),
                     ));
-                    n_per_center.push(self.rng.random_range(0..=nmiss.max(1)));
+                    n_per_center.push(if i != n - 1 {
+                        self.rng.random_range(0..=nmiss.max(1))
+                    } else {
+                        nmiss
+                    });
                     nmiss = nmiss.saturating_sub(n_per_center[i]);
                 }
-                (0..nmiss)
-                    .into_iter()
-                    .map(|_| {
-                        let (x, y) = centers[self.rng.random_range(0..centers.len())];
-                        let sigma = 10.0;
-                        let gx = Gauss::new(x as f64, sigma);
-                        let gy = Gauss::new(y as f64, sigma);
-                        (
-                            gx.sample(&mut self.rng)
-                                .clamp(0.0, arr.ncols() as f64 - 1.0)
-                                as usize,
-                            gy.sample(&mut self.rng)
-                                .clamp(0.0, arr.nrows() as f64 - 1.0)
-                                as usize,
-                        )
+                println!("({}, {}) {:?}", arr.ncols(), arr.nrows(), centers);
+                centers
+                    .iter()
+                    .zip(&n_per_center)
+                    .map(|(&(x, y), &nk)| {
+                        // area = r^2 * pi => r = sqrt(area/pi)
+                        let r = (nk as f64 / f64::consts::PI).sqrt();
+                        let points: Vec<_> = (0..arr.ncols() * arr.nrows())
+                            .into_iter()
+                            .map(|x| (x % arr.ncols(), x / arr.ncols()))
+                            .enumerate()
+                            .filter_map(|(k, (a, b))| {
+                                if ((x as f64 - a as f64).powf(2.0)
+                                    + (y as f64 - b as f64).powf(2.0))
+                                .sqrt()
+                                    <= (2.0 * r)
+                                {
+                                    Some((a, b))
+                                } else {
+                                    None
+                                }
+                            })
+                            .take(nk)
+                            .collect();
+                        points
                     })
+                    .flatten()
                     .collect()
             }
             _ => panic!("Not a pattern!"),
         };
+        println!("({}, {}) {:?}", arr.ncols(), arr.nrows(), ids);
         common::remove(arr, &ids)
     }
 }

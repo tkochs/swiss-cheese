@@ -5,12 +5,12 @@ use rayon::prelude::*;
 #[derive(Debug)]
 pub struct Gauss {
     mean: f64,
-    var: f64,
+    stddev: f64,
 }
 
 impl Gauss {
-    pub fn new(mean: f64, var: f64) -> Gauss {
-        Gauss { mean, var }
+    pub fn new(mean: f64, stddev: f64) -> Gauss {
+        Gauss { mean, stddev }
     }
 
     pub fn sample(&self, rng: &mut StdRng) -> f64 {
@@ -22,7 +22,7 @@ impl Gauss {
         let b: f64 = rng.random();
         // Box-Muller transform
         let z = f64::sqrt(-2.0 * a.ln()) * f64::cos(2.0 * std::f64::consts::PI * b);
-        self.mean + self.var * z
+        self.mean + self.stddev * z
     }
 }
 

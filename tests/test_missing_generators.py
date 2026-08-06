@@ -156,10 +156,10 @@ def test_mnar_var():
 @pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
 def test_alpha(generator, alpha):
     df = data()
-    missing = generator(df, alpha)
+    missing: pd.DataFrame = generator(df, alpha)
     print(missing)
     print(df.min())
-    assert missing.isna().sum().sum() == np.ceil(df.size*alpha)
+    assert missing.isna().sum().sum() == np.ceil(df.size*alpha), f"Expected: {np.ceil(df.size*alpha)} Actual {missing.isna().sum().sum()}"
     assert not df.isna().any().any(), "introduced missing in original data"
 
 
