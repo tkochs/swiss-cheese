@@ -192,14 +192,14 @@ pub trait Generator {
 
 pub fn remove(arr: &mut Array2<f64>, ids: &Vec<(usize, usize)>) -> usize {
     let arr_ptr = Arc::new(SendPtr(arr.as_mut_ptr()));
-    let l = ids.len();
+    let len = ids.len();
     ids.par_iter().for_each(|(r, c)| {
         // arr[(x, y)] = f64::NAN;
         unsafe {
             *arr_ptr.0.add(r * arr.ncols() + c) = f64::NAN;
         }
     });
-    l
+    len
 }
 
 pub fn fix(shape: &[usize], rng: &mut StdRng, mode: &Mode) -> Vec<usize> {

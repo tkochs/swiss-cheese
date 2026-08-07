@@ -45,35 +45,47 @@ def data(kind: str = "MCAR"):
             raise ValueError(f"No dataframe for this type: {kind}")
 
 
-@pytest.mark.parametrize("generator", ALL_GENERATORS)
-def test_n_misisng(generator):
-    df = data()
-    n = df.size
-    missing = generator(df, 0.5)
-    assert not df.isna().any().any(), "introduced missing in original data"
+class TestGeneralProperties:
 
-    # ensure no row or column is fully missing
-    rows_all_nan = missing.isna().all(axis=1).sum()
-    cols_all_nan = missing.isna().all(axis=0).sum()
-    assert rows_all_nan == 0, "Some rows are fully NaN"
-    assert cols_all_nan == 0, "Some columns are fully NaN"
-    assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n), f"{
-        generator} produces wrong n missing expected: {0.5}, actual: {missing.isna().sum().sum() / n}"
+    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    @pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
+    def test_alpha(self, generator, alpha):
+        df = data()
+        missing: pd.DataFrame = generator(df, alpha)
+        print(missing)
+        print(df.min())
+        assert missing.isna().sum().sum() == np.ceil(df.size*alpha), f"Expected: {np.ceil(df.size*alpha)} Actual {missing.isna().sum().sum()}"
+        assert not df.isna().any().any(), "introduced missing in original data"
+
+    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    def test_n_misisng(self, generator):
+        df = data()
+        n = df.size
+        missing = generator(df, 0.5)
+        assert not df.isna().any().any(), "introduced missing in original data"
+
+        # ensure no row or column is fully missing
+        rows_all_nan = missing.isna().all(axis=1).sum()
+        cols_all_nan = missing.isna().all(axis=0).sum()
+        assert rows_all_nan == 0, "Some rows are fully NaN"
+        assert cols_all_nan == 0, "Some columns are fully NaN"
+        assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n), f"{
+            generator} produces wrong n missing expected: {0.5}, actual: {missing.isna().sum().sum() / n}"
 
 
-@pytest.mark.parametrize("generator", ALL_GENERATORS)
-def test_strdata(generator):
-    df = data("WithStr")
-    n = df.size
-    missing = MCAR()(df, 0.5)
-    assert not df.isna().any().any(), "introduced missing in original data"
+    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    def test_strdata(self, generator):
+        df = data("WithStr")
+        n = df.size
+        missing = MCAR()(df, 0.5)
+        assert not df.isna().any().any(), "introduced missing in original data"
 
-    # ensure no row or column is fully missing
-    rows_all_nan = missing.isna().all(axis=1).sum()
-    cols_all_nan = missing.isna().all(axis=0).sum()
-    assert rows_all_nan == 0, "Some rows are fully NaN"
-    assert cols_all_nan == 0, "Some columns are fully NaN"
-    assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n)
+        # ensure no row or column is fully missing
+        rows_all_nan = missing.isna().all(axis=1).sum()
+        cols_all_nan = missing.isna().all(axis=0).sum()
+        assert rows_all_nan == 0, "Some rows are fully NaN"
+        assert cols_all_nan == 0, "Some columns are fully NaN"
+        assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n)
 
 
 def test_mcar_error():
@@ -152,15 +164,6 @@ def test_mnar_var():
     assert not missing.iloc[4, :].isna().all(), "Entire row is NaN!"
 
 
-@pytest.mark.parametrize("generator", ALL_GENERATORS)
-@pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
-def test_alpha(generator, alpha):
-    df = data()
-    missing: pd.DataFrame = generator(df, alpha)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == np.ceil(df.size*alpha), f"Expected: {np.ceil(df.size*alpha)} Actual {missing.isna().sum().sum()}"
-    assert not df.isna().any().any(), "introduced missing in original data"
 
 
 def test_mnar_max_det():

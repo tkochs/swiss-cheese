@@ -1,4 +1,5 @@
 use core::f64;
+use std::collections::HashSet;
 
 use super::{
     common,
@@ -11,7 +12,7 @@ use crate::generators::utils::get_samples;
 use ndarray::Array2;
 use pyo3::prelude::*;
 use rand::prelude::*;
-use rayon::{iter::Enumerate, prelude::*};
+use rayon::prelude::*;
 
 #[pyclass(name = "MNAR")]
 pub struct MNAR {
@@ -137,14 +138,14 @@ impl MNAR {
     }
 
     fn drop_pattern(&mut self, arr: &mut Array2<f64>, fix: &[usize], nmiss: usize) -> usize {
-        let ids = match self.mode {
+        let ids: Vec<_> = match self.mode {
             Mode::BLOCK {
                 max_width,
                 max_height,
             } => {
                 let (mut max_width, mut max_height) = (
                     (arr.ncols() as f64 * max_width) as usize,
-                    (arr.nrows() as f64 * max_height) as usize,
+                    (arr.nrows() as f64 * max_height) as usize - 1,
                 );
                 let (mut x, mut y, mut width, mut height);
                 let mut ids;
@@ -187,6 +188,7 @@ impl MNAR {
             Mode::BLOB(n) => {
                 let mut centers = Vec::with_capacity(n);
                 let mut n_per_center = Vec::with_capacity(n);
+                let mut seeds: Vec<u64> = Vec::with_capacity(n);
                 let mut nmiss = nmiss;
                 for i in 0..n {
                     centers.push((
@@ -199,31 +201,54 @@ impl MNAR {
                         nmiss
                     });
                     nmiss = nmiss.saturating_sub(n_per_center[i]);
+                    seeds.push(self.rng.random());
                 }
-                println!("({}, {}) {:?}", arr.ncols(), arr.nrows(), centers);
+
                 centers
-                    .iter()
+                    .par_iter()
                     .zip(&n_per_center)
-                    .map(|(&(x, y), &nk)| {
-                        // area = r^2 * pi => r = sqrt(area/pi)
-                        let r = (nk as f64 / f64::consts::PI).sqrt();
-                        let points: Vec<_> = (0..arr.ncols() * arr.nrows())
-                            .into_iter()
-                            .map(|x| (x % arr.ncols(), x / arr.ncols()))
-                            .enumerate()
-                            .filter_map(|(k, (a, b))| {
-                                if ((x as f64 - a as f64).powf(2.0)
-                                    + (y as f64 - b as f64).powf(2.0))
-                                .sqrt()
-                                    <= (2.0 * r)
-                                {
-                                    Some((a, b))
-                                } else {
-                                    None
+                    .zip(&seeds)
+                    .map(|((&(x, y), &k), &s)| {
+                        let (vx, vy) = constants::DEFAULT_BLOB_VAR;
+                        let dx = Gauss::new(x as f64, vx * arr.ncols() as f64);
+                        let dy = Gauss::new(y as f64, vy * arr.nrows() as f64);
+                        let mut rng = StdRng::seed_from_u64(s);
+                        let mut points = HashSet::with_capacity(k);
+                        for _ in 0..k {
+                            'search: loop {
+                                let a = (dx.sample(&mut rng) as usize).min(arr.ncols() - 1);
+                                let b = (dy.sample(&mut rng) as usize).min(arr.nrows() - 1);
+                                let p = (b, a);
+                                if fix[b] == a || arr[p].is_nan() {
+                                    continue;
                                 }
-                            })
-                            .take(nk)
-                            .collect();
+                                if points.insert(p) {
+                                    break;
+                                } else {
+                                    for radius in 0..arr.ncols() {
+                                        let rmin = b.saturating_sub(radius);
+                                        let rmax = (b + radius).min(arr.nrows() - 1);
+                                        let cmin = a.saturating_sub(radius);
+                                        let cmax = (a + radius).min(arr.ncols() - 1);
+
+                                        // Search the perimeter of the square
+                                        for r in rmin..=rmax {
+                                            for c in cmin..=cmax {
+                                                if (r > rmin && r < rmax && c > cmin && c < cmax)
+                                                    || fix[r] == c
+                                                {
+                                                    continue;
+                                                }
+
+                                                if points.insert((r, c)) {
+                                                    break 'search;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         points
                     })
                     .flatten()
@@ -231,7 +256,6 @@ impl MNAR {
             }
             _ => panic!("Not a pattern!"),
         };
-        println!("({}, {}) {:?}", arr.ncols(), arr.nrows(), ids);
         common::remove(arr, &ids)
     }
 }
