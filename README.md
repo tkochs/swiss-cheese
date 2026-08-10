@@ -32,6 +32,10 @@ missing_df = generator(df, 0.4) # returns np.array or DataFrame with 40% missing
   Removes the maximum value of each feature until desired $\alpha$ has been achieved.
   #### Gaussian Missing (GM)
   Samples from a gaussian (mean, var given as parameter) and romves closest value.
+  #### Block
+  Cuts out random rectangular shapes out of the data. Maximum width and height can be passed as parameter (block_size=(width, height)).
+  #### Blob
+  Cuts out random blob. Number of blobs can be passed as parameter (n_blobs).
   
 # Missing At Random (MAR)
 
