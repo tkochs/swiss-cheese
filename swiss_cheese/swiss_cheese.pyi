@@ -1,5 +1,3 @@
-from enum import Enum
-# from numpy import uint64
 import pandas as pd
 
 
@@ -14,6 +12,8 @@ class MNAR:
         self,
         mean: float | None = None,
         variance: float | None = None,
+        block_size: tuple[float, float] | None = None,
+        n_blobs: int | None = None,
         mode: str = "GM",
         max_missing_per_column: float = 0.8,
         random_seed: int | None = None,
