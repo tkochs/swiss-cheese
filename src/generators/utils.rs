@@ -1,14 +1,16 @@
 use ndarray::ArrayView2;
 use rand::prelude::*;
+use rayon::prelude::*;
 
+#[derive(Debug)]
 pub struct Gauss {
     mean: f64,
-    var: f64,
+    stddev: f64,
 }
 
 impl Gauss {
-    pub fn new(mean: f64, var: f64) -> Gauss {
-        Gauss { mean, var }
+    pub fn new(mean: f64, stddev: f64) -> Gauss {
+        Gauss { mean, stddev }
     }
 
     pub fn sample(&self, rng: &mut StdRng) -> f64 {
@@ -20,28 +22,32 @@ impl Gauss {
         let b: f64 = rng.random();
         // Box-Muller transform
         let z = f64::sqrt(-2.0 * a.ln()) * f64::cos(2.0 * std::f64::consts::PI * b);
-        self.mean + self.var * z
+        self.mean + self.stddev * z
     }
-}
-pub fn fix(shape: &[usize], rng: &mut StdRng) -> Vec<usize> {
-    let &[rows, cols, ..] = shape else {
-        panic!("fix() needs at least [rows, cols]");
-    };
-    (0..rows)
-        .into_iter()
-        .map(|_| rng.random_range(0..cols))
-        .collect()
 }
 
 pub fn get_distribution(mean: f64, var: f64, arr: ArrayView2<f64>) -> Vec<Gauss> {
-    let mut dist = Vec::with_capacity(arr.ncols());
-    let mut buff = Vec::with_capacity(arr.nrows());
-    for i in 0..arr.ncols() {
-        let col = arr.column(i);
-        let (local_mean, local_var) = transform(&mut buff, col.iter().copied(), mean, var);
-        dist.push(Gauss::new(local_mean, local_var));
+    (0..arr.ncols())
+        .into_par_iter()
+        .map(|i| {
+            let col = arr.column(i);
+            let mut buff = Vec::with_capacity(arr.nrows());
+            let (local_mean, local_var) = transform(&mut buff, col.iter().copied(), mean, var);
+            Gauss::new(local_mean, local_var)
+        })
+        .collect()
+}
+
+pub fn get_samples(
+    distributions: &Option<Vec<Gauss>>,
+    cols: &Vec<usize>,
+    rng: &mut StdRng,
+) -> Vec<f64> {
+    if let Some(dists) = distributions {
+        cols.iter().map(|&c| dists[c].sample(rng)).collect()
+    } else {
+        vec![0.0; cols.len()]
     }
-    dist
 }
 
 fn transform(

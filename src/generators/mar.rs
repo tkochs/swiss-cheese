@@ -1,20 +1,16 @@
-use super::{common::mode::*, constants, utils};
-use crate::utils::{StringEncoding, arr_to_out, pyany_to_vec};
+use super::{common, common::Generator, common::mode::*, constants, utils};
+use crate::generators::utils::{Gauss, get_distribution};
 use ndarray::Array2;
 use ndarray_stats::CorrelationExt;
-use pyo3::exceptions::PyUserWarning;
 use pyo3::prelude::*;
 use rand::prelude::*;
 use rayon::prelude::*;
-use std::sync::Arc;
 
 #[pyclass(name = "MAR")]
 pub struct MAR {
     max_missing_per_column: f64,
     rng: StdRng,
     mode: Mode,
-    mean: f64,
-    variance: f64,
 }
 
 #[pymethods]
@@ -27,17 +23,20 @@ impl MAR {
         max_missing_per_column: f64,
         mode: &str,
         random_seed: Option<u64>,
-    ) -> MAR {
-        let mut r = rand::rng();
-        let seed = random_seed.unwrap_or(r.random());
-        let rng = StdRng::seed_from_u64(seed);
-        MAR {
+    ) -> PyResult<MAR> {
+        let mode: Mode = Mode::new(mode, mean, variance, None, None)?;
+        let rng = common::build_rng(random_seed);
+        if let Mode::BLOCK { .. } | Mode::BLOB(_) = mode {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Mode {} not supported for MAR yet.",
+                mode.as_str(),
+            )));
+        }
+        Ok(MAR {
             max_missing_per_column,
             rng,
-            mode: mode.into(),
-            mean: mean.unwrap_or(0.5),
-            variance: variance.unwrap_or(0.0),
-        }
+            mode,
+        })
     }
 
     fn __call__<'py>(
@@ -46,54 +45,64 @@ impl MAR {
         data: &Bound<'_, PyAny>,
         missing_rate: f64,
     ) -> PyResult<Bound<'py, PyAny>> {
-        let (array, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
-        let mut arr = Arc::new(array);
-        let missing_rate = self._adjust_alpha(py, arr.ncols(), missing_rate);
-        self.drop(&mut arr, missing_rate);
-        arr_to_out(py, &arr, out, enc_info)
+        self.call(py, data, missing_rate)
     }
 
     fn __repr__(&self) -> String {
-        format!("MAR")
+        match self.mode {
+            Mode::GM { mean, .. } => format!("MAR[{}]", mean),
+            Mode::MIN => format!("MAR[MIN]"),
+            Mode::MAX => format!("MAR[MAX]"),
+            _ => panic!("No valid mode passed during construction!"),
+        }
+    }
+}
+
+impl Generator for MAR {
+    fn max_missing_per_column(&self) -> f64 {
+        self.max_missing_per_column
+    }
+
+    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) {
+        let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
+        let mut missing_count = 0;
+        let (miss_cols, pairs) = self.pairs(arr, alpha);
+        let (distributions, cmp): (
+            Option<Vec<Gauss>>,
+            fn(&f64, &f64, &f64) -> std::cmp::Ordering,
+        ) = match self.mode {
+            Mode::MAX => (None, |a, b, _| a.total_cmp(b)),
+            Mode::MIN => (None, |a, b, _| b.total_cmp(a)),
+            Mode::GM { mean, var } => (Some(get_distribution(mean, var, arr.view())), |a, b, s| {
+                ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
+            }),
+            Mode::BLOCK { .. } | Mode::BLOB(_) => {
+                panic!("Mode {} not supported for MAR yet.", self.mode.as_str())
+            }
+        };
+        while missing_count < n_missing {
+            let max_miss = (n_missing - missing_count).min(miss_cols.len());
+            let samples = utils::get_samples(&distributions, &miss_cols, &mut self.rng);
+            missing_count += self.drop_cols(arr, &samples[..max_miss], &pairs, cmp);
+        }
     }
 }
 
 impl MAR {
-    fn drop(&mut self, arr: &mut Arc<Array2<f64>>, alpha: f64) {
-        let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
-        let mut missing_count = 0;
-        let (_miss_cols, pairs) = self.pairs(arr, alpha);
-        let distributions = utils::get_distribution(self.mean, self.variance, arr.view());
-        let cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering = match self.mode {
-            Mode::MAX => |a, b, _| a.total_cmp(b),
-            Mode::MIN => |a, b, _| b.total_cmp(a),
-            Mode::GM => |a, b, s| ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s))),
-        };
-        while missing_count < n_missing {
-            // let cols = select_cols(&mut self.rng, arr, missing_count, n_missing, &miss_cols);
-            missing_count += self.drop_cols(arr, &distributions, &pairs, cmp);
-        }
-    }
-
     fn drop_cols(
         &mut self,
-        arr: &mut Arc<Array2<f64>>,
-        distributions: &[utils::Gauss],
+        arr: &mut Array2<f64>,
+        samples: &[f64],
         // obs: &HashMap<usize, usize>,
         cols: &[(usize, usize)],
         cmp: fn(&f64, &f64, &f64) -> std::cmp::Ordering,
     ) -> usize {
-        let samples: Vec<f64> = cols
-            .iter()
-            .map(|&c| distributions[c.1].sample(&mut self.rng))
-            .collect();
         let indices: Vec<_> = cols
             .par_iter()
-            .zip(&samples)
-            .map(|(&c, &s)| {
+            .zip(samples)
+            .filter_map(|(&c, &s)| {
                 assert!(!s.is_nan(), "Sample is nan");
-                let i = arr
-                    .column(c.1)
+                arr.column(c.1)
                     .iter()
                     .enumerate()
                     .filter(|(i, _)| !arr[(*i, c.0)].is_nan())
@@ -101,24 +110,15 @@ impl MAR {
                         cmp(*a, *b, &s)
                         // ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
                     })
-                    .map_or(None, |(i, _)| Some(i));
-                (i, c)
+                    .map(|(i, _)| (i, c.0))
             })
             .collect();
-        let arr = Arc::get_mut(arr).expect("Err: Multithreading issue detected!");
-        let mut count = 0;
-        for (opt, c) in indices {
-            opt.map(|r| {
-                arr[(r, c.0)] = f64::NAN;
-                count += 1;
-            });
-        }
-        count
+        common::remove(arr, &indices)
     }
 
     fn pairs(
         &mut self,
-        arr: &Arc<Array2<f64>>,
+        arr: &Array2<f64>,
         alpha: f64,
     ) -> (
         Vec<usize>, //HashMap<usize, usize>,
@@ -155,23 +155,6 @@ impl MAR {
                 .map(|(a, (_, b))| (*a, b))
                 .collect(),
         )
-    }
-
-    #[inline]
-    fn _adjust_alpha<'py>(&self, py: Python<'py>, n_cols: usize, alpha: f64) -> f64 {
-        let max = self.max_missing_per_column - (self.max_missing_per_column / n_cols as f64);
-        if alpha > max {
-            let msg = std::ffi::CString::new(format!(
-                "Warning: Missing rate too high to ensure MAR properties! Maximum missing rate: {}",
-                max
-            ))
-            .unwrap();
-            PyErr::warn(py, &py.get_type::<PyUserWarning>(), &msg, 0)
-                .expect("Something went wrong..");
-            max
-        } else {
-            alpha
-        }
     }
 }
 

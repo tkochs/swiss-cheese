@@ -4,6 +4,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
+ALL_GENERATORS = [
+    MCAR(),
+    MNAR(0.75, 0.01),
+    MAR(0.75, 0.01),
+    MNAR(mode="block"),
+    MNAR(mode="blob"),
+]
+
 
 def data(kind: str = "MCAR"):
     rng = np.random.default_rng()
@@ -37,32 +45,47 @@ def data(kind: str = "MCAR"):
             raise ValueError(f"No dataframe for this type: {kind}")
 
 
-def test_mcar():
-    df = data()
-    n = df.size
-    missing = MCAR()(df, 0.5)
-    assert not df.isna().any().any(), "introduced missing in original data"
+class TestGeneralProperties:
 
-    # ensure no row or column is fully missing
-    rows_all_nan = missing.isna().all(axis=1).sum()
-    cols_all_nan = missing.isna().all(axis=0).sum()
-    assert rows_all_nan == 0, "Some rows are fully NaN"
-    assert cols_all_nan == 0, "Some columns are fully NaN"
-    assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n)
+    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    @pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
+    def test_alpha(self, generator, alpha):
+        df = data()
+        missing: pd.DataFrame = generator(df, alpha)
+        print(missing)
+        print(df.min())
+        assert missing.isna().sum().sum() == np.ceil(df.size*alpha), f"Expected: {np.ceil(df.size*alpha)} Actual {missing.isna().sum().sum()}"
+        assert not df.isna().any().any(), "introduced missing in original data"
+
+    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    def test_n_misisng(self, generator):
+        df = data()
+        n = df.size
+        missing = generator(df, 0.5)
+        assert not df.isna().any().any(), "introduced missing in original data"
+
+        # ensure no row or column is fully missing
+        rows_all_nan = missing.isna().all(axis=1).sum()
+        cols_all_nan = missing.isna().all(axis=0).sum()
+        assert rows_all_nan == 0, "Some rows are fully NaN"
+        assert cols_all_nan == 0, "Some columns are fully NaN"
+        assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n), f"{
+            generator} produces wrong n missing expected: {0.5}, actual: {missing.isna().sum().sum() / n}"
 
 
-def test_mcar_strdata():
-    df = data("WithStr")
-    n = df.size
-    missing = MCAR()(df, 0.5)
-    assert not df.isna().any().any(), "introduced missing in original data"
+    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    def test_strdata(self, generator):
+        df = data("WithStr")
+        n = df.size
+        missing = MCAR()(df, 0.5)
+        assert not df.isna().any().any(), "introduced missing in original data"
 
-    # ensure no row or column is fully missing
-    rows_all_nan = missing.isna().all(axis=1).sum()
-    cols_all_nan = missing.isna().all(axis=0).sum()
-    assert rows_all_nan == 0, "Some rows are fully NaN"
-    assert cols_all_nan == 0, "Some columns are fully NaN"
-    assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n)
+        # ensure no row or column is fully missing
+        rows_all_nan = missing.isna().all(axis=1).sum()
+        cols_all_nan = missing.isna().all(axis=0).sum()
+        assert rows_all_nan == 0, "Some rows are fully NaN"
+        assert cols_all_nan == 0, "Some columns are fully NaN"
+        assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n)
 
 
 def test_mcar_error():
@@ -78,7 +101,7 @@ def test_mcar_error():
 def test_mnar_warn():
     with pytest.warns(UserWarning):
         df = data()
-        missing = MNAR()(df, 1.0)
+        missing = MNAR(max_missing_per_column=1.0)(df, 1.0)
     n_miss = missing.isna().sum().sum()
     print(missing)
     print(n_miss)
@@ -141,68 +164,6 @@ def test_mnar_var():
     assert not missing.iloc[4, :].isna().all(), "Entire row is NaN!"
 
 
-def test_mnar_alpha():
-    df = data()
-    missing = MNAR()(df, 0.1)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 5
-
-    missing = MNAR()(df, 0.2)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 10
-
-    missing = MNAR()(df, 0.15)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 8
-    assert not df.isna().any().any(), "introduced missing in original data"
-
-
-def test_mnarrs():
-    df = data()
-    missing = MNAR(mean=0.5)(df, 0.1)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 5
-
-
-def test_rs_str():
-    df = data("WithStr")
-    print(df.dtypes)
-    missing = MNAR(mean=0.5)(df, 0.1)
-    print(missing)
-    print(df.min())
-    assert missing.isna().sum().sum() == 5
-
-
-def test_rs_stable():
-    df = data()
-    missing = MNAR()(df, 0.1)
-    print(df)
-    print(missing)
-    print(df.min())
-    mm = missing.isna()
-
-    pd.testing.assert_series_equal(
-        df[~mm].stack(),
-        missing[~mm].stack(),
-        check_names=False,
-    )
-
-    df = data("WithStr")
-    missing = MNAR()(df, 0.1)
-    print(df)
-    print(missing)
-    print(df.min())
-    mm = missing.isna()
-
-    pd.testing.assert_series_equal(
-        df[~mm].stack(),
-        missing[~mm].stack(),
-        check_names=False,
-    )
 
 
 def test_mnar_max_det():
