@@ -28,6 +28,7 @@ def plot(data, title):
     plt.close()
 
 
+@pytest.mark.visualize
 @pytest.mark.parametrize("mean", [0.25, 0.5, 0.75])
 @pytest.mark.parametrize("variance", [0.01, 0.1, 0.2])
 @pytest.mark.parametrize("mode", ["gm", "min", "max"])
@@ -37,6 +38,7 @@ def test_mnar(data, mean: float, variance: float, mode: str):
     plot(data, f"figures/mnar_{mode}_{mean}_{variance}.png")
 
 
+@pytest.mark.visualize
 @pytest.mark.parametrize("mean", [0.25, 0.5, 0.75])
 @pytest.mark.parametrize("variance", [0.01, 0.1, 0.2])
 @pytest.mark.parametrize("mode", ["gm", "min", "max"])
@@ -46,18 +48,21 @@ def test_mar(data, mean: float, variance: float, mode: str):
     plot(data, f"figures/mar_{mode}_{mean}_{variance}.png")
 
 
+@pytest.mark.visualize
 def test_mcar(data):
     data = MCAR()(data, 0.3)
     # data[np.isnan(data)] = 0
     plot(data, f"figures/mcar.png")
 
 
+@pytest.mark.visualize
 def test_block(data):
     data = MNAR(mode="block")(data, 0.3)
     # data[np.isnan(data)] = 0
     plot(data, f"figures/block.png")
 
 
+@pytest.mark.visualize
 def test_blob(data):
     data = MNAR(mode="blob")(data, 0.3)
     # data[np.isnan(data)] = 0

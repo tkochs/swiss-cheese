@@ -168,6 +168,7 @@ def test_mnar_var():
 
 def test_mnar_max_det():
     df = data("MNAR")
+    assert (df.iloc[0] < df.iloc[-1]).all()
     missing = MNAR(mode="max")(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
@@ -175,13 +176,14 @@ def test_mnar_max_det():
     print(missing > df.min())
     # assert (missing[~missing.isna()].min() > df.min()).all(), "max test"
     assert missing.isna().sum().sum() == 5, "Wrong total"
-    missing = missing.iloc[0]
+    missing = missing.iloc[-1]
     assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
         missing.isna().sum()}"
 
 
 def test_mnar_min_det():
     df = data("MNAR")
+    assert (df.iloc[0] < df.iloc[-1]).all()
     missing = MNAR(mode="min")(df, 0.1)
     assert not df.isna().any().any(), "introduced missing in original data"
     print(missing)
@@ -190,7 +192,7 @@ def test_mnar_min_det():
     # assert (missing[~missing.isna()].max() < df.max()).all(), "min test"
     # assert missing.isna().sum().sum() == 4
     assert missing.isna().sum().sum() == 5, "Wrong total"
-    missing = missing.iloc[-1]
+    missing = missing.iloc[0]
     assert missing.isna().sum() == 4, f"Expected 4 missing values, got {
         missing.isna().sum()}"
 

@@ -71,8 +71,8 @@ impl Generator for MAR {
             Option<Vec<Gauss>>,
             fn(&f64, &f64, &f64) -> std::cmp::Ordering,
         ) = match self.mode {
-            Mode::MAX => (None, |a, b, _| a.total_cmp(b)),
-            Mode::MIN => (None, |a, b, _| b.total_cmp(a)),
+            Mode::MAX => (None, |a, b, _| b.total_cmp(a)),
+            Mode::MIN => (None, |a, b, _| a.total_cmp(b)),
             Mode::GM { mean, var } => (Some(get_distribution(mean, var, arr.view())), |a, b, s| {
                 ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
             }),
