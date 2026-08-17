@@ -52,7 +52,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v6
         with:
-          name: wheels-linux-${{ matrix.platform.target }}
+          name: wheels-linux-${{ matrix.platform.target }}-py${{ matrix.python-version }}
           path: dist
 
   musllinux:
@@ -68,6 +68,7 @@ jobs:
             target: aarch64
           - runner: ubuntu-22.04
             target: armv7
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -83,7 +84,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v6
         with:
-          name: wheels-musllinux-${{ matrix.platform.target }}
+          name: wheels-musllinux-${{ matrix.platform.target }}-py${{ matrix.python-version }}
           path: dist
 
   windows:
@@ -100,6 +101,7 @@ jobs:
           - runner: windows-11-arm
             target: aarch64
             python_arch: arm64
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -115,7 +117,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v6
         with:
-          name: wheels-windows-${{ matrix.platform.target }}
+          name: wheels-windows-${{ matrix.platform.target }}-py${{ matrix.python-version }}
           path: dist
 
   macos:
@@ -127,6 +129,7 @@ jobs:
             target: x86_64
           - runner: macos-latest
             target: aarch64
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -141,7 +144,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v6
         with:
-          name: wheels-macos-${{ matrix.platform.target }}
+          name: wheels-macos-${{ matrix.platform.target }}-py${{ matrix.python-version }}
           path: dist
 
   sdist:
