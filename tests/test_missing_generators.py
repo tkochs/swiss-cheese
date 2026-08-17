@@ -77,7 +77,7 @@ class TestGeneralProperties:
     def test_strdata(self, generator):
         df = data("WithStr")
         n = df.size
-        missing = MCAR()(df, 0.5)
+        missing = generator(df, 0.5)
         assert not df.isna().any().any(), "introduced missing in original data"
 
         # ensure no row or column is fully missing
