@@ -2,6 +2,8 @@ use pyo3::prelude::*;
 mod generators;
 mod utils;
 
+const MAX_AMOUNT_OF_WORK: u64 = 500_000;
+
 #[pymodule]
 mod swiss_cheese {
     use super::generators;

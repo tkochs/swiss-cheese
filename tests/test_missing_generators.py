@@ -47,7 +47,7 @@ def data(kind: str = "MCAR"):
 
 class TestGeneralProperties:
 
-    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    @pytest.mark.parametrize("generator", ALL_GENERATORS, ids=repr)
     @pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
     def test_alpha(self, generator, alpha):
         df = data()
@@ -57,7 +57,7 @@ class TestGeneralProperties:
         assert missing.isna().sum().sum() == np.ceil(df.size*alpha), f"Expected: {np.ceil(df.size*alpha)} Actual {missing.isna().sum().sum()}"
         assert not df.isna().any().any(), "introduced missing in original data"
 
-    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    @pytest.mark.parametrize("generator", ALL_GENERATORS, ids=repr)
     def test_n_misisng(self, generator):
         df = data()
         n = df.size
@@ -73,7 +73,7 @@ class TestGeneralProperties:
             generator} produces wrong n missing expected: {0.5}, actual: {missing.isna().sum().sum() / n}"
 
 
-    @pytest.mark.parametrize("generator", ALL_GENERATORS)
+    @pytest.mark.parametrize("generator", ALL_GENERATORS, ids=repr)
     def test_strdata(self, generator):
         df = data("WithStr")
         n = df.size

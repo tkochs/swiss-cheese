@@ -8,7 +8,7 @@ use super::{
     constants,
     utils::{Gauss, get_distribution},
 };
-use crate::generators::utils::get_samples;
+use crate::{MAX_AMOUNT_OF_WORK, generators::utils::get_samples, utils::Errors};
 use ndarray::Array2;
 use pyo3::prelude::*;
 use rand::prelude::*;
@@ -71,7 +71,7 @@ impl Generator for MNAR {
         self.max_missing_per_column
     }
 
-    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) {
+    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) -> Result<(), Errors> {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
         let (distributions, cmp): (
@@ -88,6 +88,7 @@ impl Generator for MNAR {
             Mode::BLOB(_) => (None, None),
         };
         let fix = common::fix(arr.shape(), &mut self.rng, &self.mode);
+        // let mut count = 0;
         match self.mode {
             Mode::GM { .. } | Mode::MAX | Mode::MIN => {
                 let cmp = cmp.expect(&format!(
@@ -95,17 +96,26 @@ impl Generator for MNAR {
                     self.mode.as_str()
                 ));
                 while missing_count < n_missing {
+                    // if count > MAX_AMOUNT_OF_WORK {
+                    //     Err(Errors::MaxWorkExeeded)?;
+                    // }
                     let cols = select_cols(&mut self.rng, arr, missing_count, n_missing);
                     let samples = get_samples(&distributions, &cols, &mut self.rng);
                     missing_count += self.drop_cols(arr, &samples, &cols, cmp, &fix);
+                    // count += 1
                 }
             }
             Mode::BLOCK { .. } | Mode::BLOB(_) => {
                 while missing_count < n_missing {
-                    missing_count += self.drop_pattern(arr, &fix, n_missing - missing_count);
+                    // if count > MAX_AMOUNT_OF_WORK {
+                    //     Err(Errors::MaxWorkExeeded)?;
+                    // }
+                    missing_count += self.drop_pattern(arr, &fix, n_missing - missing_count)?;
+                    // count += 1
                 }
             }
         }
+        Ok(())
     }
 }
 
@@ -137,8 +147,13 @@ impl MNAR {
         common::remove(arr, &indices)
     }
 
-    fn drop_pattern(&mut self, arr: &mut Array2<f64>, fix: &[usize], nmiss: usize) -> usize {
-        let ids: Vec<_> = match self.mode {
+    fn drop_pattern(
+        &mut self,
+        arr: &mut Array2<f64>,
+        fix: &[usize],
+        nmiss: usize,
+    ) -> Result<usize, Errors> {
+        let ids: Vec<_> = match &self.mode {
             Mode::BLOCK {
                 max_width,
                 max_height,
@@ -186,11 +201,11 @@ impl MNAR {
                 ids
             }
             Mode::BLOB(n) => {
-                let mut centers = Vec::with_capacity(n);
-                let mut n_per_center = Vec::with_capacity(n);
-                let mut seeds: Vec<u64> = Vec::with_capacity(n);
+                let mut centers = Vec::with_capacity(*n);
+                let mut n_per_center = Vec::with_capacity(*n);
+                let mut seeds: Vec<u64> = Vec::with_capacity(*n);
                 let mut nmiss = nmiss;
-                for i in 0..n {
+                for i in 0..*n {
                     centers.push((
                         self.rng.random_range(0..arr.ncols()),
                         self.rng.random_range(0..arr.nrows()),
@@ -254,9 +269,9 @@ impl MNAR {
                     .flatten()
                     .collect()
             }
-            _ => panic!("Not a pattern!"),
+            m => Err(Errors::ValueError(format!("Not a valid pattern! {:?}", m)))?,
         };
-        common::remove(arr, &ids)
+        Ok(common::remove(arr, &ids))
     }
 }
 
