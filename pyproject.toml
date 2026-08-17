@@ -33,3 +33,10 @@ dev = [
     "seaborn>=0.13.2",
 ]
 
+
+[tool.pytest.ini_options]
+addopts = "-m 'not visualize'"
+markers = [
+    "visualize: tests that generate visualization images",
+    "heavy: slow or resource-intensive tests",
+]

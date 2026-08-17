@@ -1,4 +1,7 @@
-use crate::{generators::common::mode::Mode, generators::constants, utils::SendPtr};
+use crate::{
+    generators::{common::mode::Mode, constants},
+    utils::{Errors, SendPtr},
+};
 use ndarray::Array2;
 use pyglue::{StringEncoding, arr_to_out, pyany_to_vec};
 use pyo3::exceptions::PyUserWarning;
@@ -9,6 +12,7 @@ use std::sync::Arc;
 
 pub mod mode {
     use super::*;
+    #[derive(Debug)]
     pub enum Mode {
         GM { mean: f64, var: f64 },
         MAX,
@@ -183,11 +187,11 @@ pub trait Generator {
     ) -> PyResult<Bound<'py, PyAny>> {
         let (mut arr, out, enc_info) = pyany_to_vec(data, &Some(StringEncoding::LabelEncoding))?;
         let missing_rate = _adjust_alpha(arr.ncols(), missing_rate, self.max_missing_per_column());
-        self.drop(&mut arr, missing_rate);
-        arr_to_out(py, &arr, out, enc_info)
+        self.drop(&mut arr, missing_rate)?;
+        arr_to_out(py, &arr, out, enc_info.as_ref())
     }
     fn max_missing_per_column(&self) -> f64;
-    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64);
+    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) -> Result<(), Errors>;
 }
 
 pub fn remove(arr: &mut Array2<f64>, ids: &Vec<(usize, usize)>) -> usize {

@@ -1,1 +1,6 @@
 **__pycache__
+**.so
+target/**
+figures/**
+uv.lock
+Cargo.lock

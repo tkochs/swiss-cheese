@@ -1,5 +1,9 @@
 use super::{common, common::Generator, common::mode::*, constants, utils};
-use crate::generators::utils::{Gauss, get_distribution};
+use crate::{
+    MAX_AMOUNT_OF_WORK,
+    generators::utils::{Gauss, get_distribution},
+    utils::Errors,
+};
 use ndarray::Array2;
 use ndarray_stats::CorrelationExt;
 use pyo3::prelude::*;
@@ -63,7 +67,7 @@ impl Generator for MAR {
         self.max_missing_per_column
     }
 
-    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) {
+    fn drop(&mut self, arr: &mut Array2<f64>, alpha: f64) -> Result<(), Errors> {
         let n_missing = (arr.len() as f64 * alpha).ceil() as usize;
         let mut missing_count = 0;
         let (miss_cols, pairs) = self.pairs(arr, alpha);
@@ -71,8 +75,8 @@ impl Generator for MAR {
             Option<Vec<Gauss>>,
             fn(&f64, &f64, &f64) -> std::cmp::Ordering,
         ) = match self.mode {
-            Mode::MAX => (None, |a, b, _| a.total_cmp(b)),
-            Mode::MIN => (None, |a, b, _| b.total_cmp(a)),
+            Mode::MAX => (None, |a, b, _| b.total_cmp(a)),
+            Mode::MIN => (None, |a, b, _| a.total_cmp(b)),
             Mode::GM { mean, var } => (Some(get_distribution(mean, var, arr.view())), |a, b, s| {
                 ((*a - s) * (*a - s)).total_cmp(&((*b - s) * (*b - s)))
             }),
@@ -80,11 +84,17 @@ impl Generator for MAR {
                 panic!("Mode {} not supported for MAR yet.", self.mode.as_str())
             }
         };
+        let mut count = 0;
         while missing_count < n_missing {
+            if count > MAX_AMOUNT_OF_WORK {
+                Err(Errors::MaxWorkExeeded)?;
+            }
             let max_miss = (n_missing - missing_count).min(miss_cols.len());
             let samples = utils::get_samples(&distributions, &miss_cols, &mut self.rng);
             missing_count += self.drop_cols(arr, &samples[..max_miss], &pairs, cmp);
+            count += 1;
         }
+        Ok(())
     }
 }
 
