@@ -5,11 +5,14 @@ use std::fmt;
 pub enum Errors {
     ValueError(String),
     MaxWorkExeeded,
+    UnknownMode(String),
 }
+
 impl fmt::Display for Errors {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ValueError(msg) => write!(f, "{}", msg),
+            Errors::UnknownMode(msg) => write!(f, "{}", msg),
             MaxWorkExeeded => write!(
                 f,
                 "After {} iterations the desired amount of missing_rate has not been reached stopping now!",
@@ -30,6 +33,7 @@ impl From<Errors> for PyErr {
     fn from(err: Errors) -> PyErr {
         match err {
             Errors::ValueError(_) => PyValueError::new_err(err.to_string()),
+            Errors::UnknownMode(s) => PyValueError::new_err(format!("{s}")),
             _ => PyRuntimeError::new_err(err.to_string()),
         }
     }
