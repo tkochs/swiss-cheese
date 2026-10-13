@@ -4,9 +4,11 @@ import numpy as np
 from scipy.stats import norm
 
 
-def max_missing_percentage(df: pd.DataFrame) -> float:
+def max_missing_percentage(df: pd.DataFrame, n_features: int | None = None) -> float:
+    if n_features == None:
+        n_features = df.shape[1]
     rows, _ = df.shape
-    n = df.size
+    n = np.max([rows * n_features, 1])
     return 1 - rows / n
 
 

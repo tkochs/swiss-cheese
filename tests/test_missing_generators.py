@@ -120,6 +120,11 @@ def test_mnar_warn():
     print(n_miss)
     assert n_miss == df.size * 0.8
 
+def test_mcar_allowed():
+    df = data()
+    missing = MCAR(allowed_features=[0])(df, 0.1)
+    assert not missing.isna().iloc[:, 1:].any().any(), "missing values in not allowed column"
+    assert missing.isna().iloc[:, 0].any().any(), "no missing values allowed column"
 
 def test_max_percentage():
     p = max_missing_percentage(data())

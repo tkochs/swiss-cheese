@@ -53,16 +53,20 @@ class MCAR:
     def _select_feature_to_keep_colwise(self, df, n_missing) -> np.ndarray[int]:
         indices = np.arange(df.size)
         grouped = indices.reshape(-1, df.shape[1])
-        safeguard = self.rng.integers(low=0, high=df.shape[1], size=grouped.shape[0])
-        keep = np.ones(grouped.shape, dtype=bool)
-        keep[np.arange(grouped.shape[0]), safeguard] = False
-        if keep.sum() < n_missing:
+        if self.allowed_features is None:
+            safeguard = self.rng.integers(low=0, high=df.shape[1], size=grouped.shape[0])
+            allow_removal = np.ones(grouped.shape, dtype=bool)
+            allow_removal[np.arange(grouped.shape[0]), safeguard] = False
+        else:
+            allow_removal = np.zeros(grouped.shape, dtype=bool)
+            allow_removal[:, self.allowed_features] = True
+        if allow_removal.sum() < n_missing:
             raise ValueError(
                 f"Cannot comply, max missing rate is {
-                    max_missing_percentage(df)
-                }, requested is: {missing_rate}"
+                    max_missing_percentage(df, len(self.allowed_features))
+                }, requested is: {n_missing/df.size}"
             )
-        indices = grouped[keep].flatten()
+        indices = grouped[allow_removal].flatten()
         return indices
 
     @override
