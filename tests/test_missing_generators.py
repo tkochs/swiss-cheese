@@ -12,6 +12,12 @@ ALL_GENERATORS = [
     MNAR(mode="blob"),
 ]
 
+ALL_GENERATORS_DET = [
+    MCAR,
+    MNAR,
+    MAR,
+]
+
 
 def data(kind: str = "MCAR"):
     rng = np.random.default_rng()
@@ -46,7 +52,6 @@ def data(kind: str = "MCAR"):
 
 
 class TestGeneralProperties:
-
     @pytest.mark.parametrize("generator", ALL_GENERATORS, ids=repr)
     @pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
     def test_alpha(self, generator, alpha):
@@ -87,6 +92,15 @@ class TestGeneralProperties:
         assert cols_all_nan == 0, "Some columns are fully NaN"
         assert np.isclose(missing.isna().sum().sum() / n, 0.5, atol=1 / n)
 
+    @pytest.mark.parametrize("generator", ALL_GENERATORS_DET, ids=repr)
+    def test_determernism(self, generator):
+        g = generator(random_seed=42)
+        df = data()
+        mm1 = g(df, 0.2).isna()
+        g = generator(random_seed=42)
+        mm2 = g(df, 0.2).isna()
+        assert mm1.equals(mm2), f"MV generator {generator.__name__} produced non-deterministic values"
+
 
 def test_mcar_error():
     with pytest.warns(UserWarning):
@@ -96,7 +110,6 @@ def test_mcar_error():
     print(missing)
     print(n_miss)
     assert n_miss == df.size * 0.8
-
 
 def test_mnar_warn():
     with pytest.warns(UserWarning):
