@@ -20,9 +20,6 @@ pub mod mode {
         BLOCK { max_width: f64, max_height: f64 },
         BLOB(usize),
     }
-    pub enum Error {
-        UnknownMode(String),
-    }
     pub const ALLOWED_MODES: &[&str] = &["GM", "MAX", "MIN", "BLOCK", "BLOB"];
 
     impl Into<&str> for &Mode {
@@ -54,13 +51,6 @@ pub mod mode {
     //         }
     //     }
     // }
-    impl From<Error> for pyo3::PyErr {
-        fn from(err: Error) -> pyo3::PyErr {
-            match err {
-                Error::UnknownMode(s) => pyo3::exceptions::PyValueError::new_err(format!("{s}")),
-            }
-        }
-    }
 
     impl Mode {
         pub fn new(
@@ -69,7 +59,7 @@ pub mod mode {
             variance: Option<f64>,
             block_size: Option<(f64, f64)>,
             n_blobs: Option<usize>,
-        ) -> Result<Self, Error> {
+        ) -> Result<Self, Errors> {
             let mode = match value.to_lowercase().as_str() {
                 "gm" => Mode::GM {
                     mean: mean.unwrap_or(constants::DEFAULT_MEAN),
@@ -87,7 +77,7 @@ pub mod mode {
                 }
                 "blob" => Mode::BLOB(n_blobs.unwrap_or(constants::DEFAULT_BLOBS)),
                 _ => {
-                    return Err(Error::UnknownMode(format!(
+                    return Err(Errors::UnknownMode(format!(
                         "Unknown mode parameter: {} (Alloed: {:?})",
                         value, ALLOWED_MODES
                     )));

@@ -2,14 +2,18 @@ import pandas as pd
 from sklearn.feature_selection import mutual_info_classif
 import numpy as np
 from scipy.stats import norm
+from warnings import deprecated
 
 
-def max_missing_percentage(df: pd.DataFrame) -> float:
+def max_missing_percentage(df: pd.DataFrame, n_features: int | None = None) -> float:
+    if n_features == None:
+        n_features = df.shape[1]
     rows, _ = df.shape
-    n = df.size
+    n = np.max([rows * n_features, 1])
     return 1 - rows / n
 
 
+@deprecated("Gauss is deprecated and moved to a rust implementation")
 class Gauss:
     def __init__(self, means, variances, seed):
         self.rng = np.random.default_rng(seed)
@@ -18,14 +22,14 @@ class Gauss:
         self.variances = variances
         self.gaussians = [lambda: self.rng.normal(
             q, v) for q, v in zip(means, variances)]
-
     def __call__(self):
+
         samples = np.array([g() for g in self.gaussians])
         assert not np.isnan(samples).all(), f"error while sampling from gaussians: \n{
             self.means}\n{self.variances}"
         return samples
 
-
+@deprecated("MNAR is moved to a rust backend and this function will be removed")
 def frequency_encode(df: pd.DataFrame, inplace: bool = True) -> pd.DataFrame:
     """
     Replaces categorical values with their frequency (count) in each column.
