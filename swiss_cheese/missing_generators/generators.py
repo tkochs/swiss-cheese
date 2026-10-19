@@ -12,8 +12,10 @@ class MCAR:
             *,
             n_features: int | None = None, 
             allowed_features: int | list[int] | None = None, # number of features that are allows missing
-            spread: float = 1.0, # how many datapoints should be affected
+            spread: float = 1.0, # fraction of rows that may get missing values (soft, more rows are added if needed)
     ):
+        if not 0.0 <= spread <= 1.0:
+            raise ValueError(f"spread must be in [0, 1], got: {spread}")
         self.seed: int | None = random_seed
         self.rng = np.random.default_rng(seed=random_seed)
         self.spread = spread
@@ -66,8 +68,21 @@ class MCAR:
                     max_missing_percentage(df, len(self.allowed_features))
                 }, requested is: {n_missing/df.size}"
             )
+        allow_removal = self._restrict_rows(allow_removal, n_missing)
         indices = grouped[allow_removal].flatten()
         return indices
+
+    def _restrict_rows(self, allow_removal, n_missing) -> np.ndarray[bool]:
+        # only target spread * n_rows rows, add more rows only if n_missing doesn't fit otherwise
+        n_rows = allow_removal.shape[0]
+        cap_per_row = allow_removal[0].sum()  # every row has the same number of removable cells
+        n_target = max(round(self.spread * n_rows), int(np.ceil(n_missing / cap_per_row)))
+        if n_target >= n_rows:
+            return allow_removal
+        rows = self.rng.choice(n_rows, size=n_target, replace=False)
+        row_mask = np.zeros(n_rows, dtype=bool)
+        row_mask[rows] = True
+        return allow_removal & row_mask[:, None]
 
     @override
     def __repr__(self):
