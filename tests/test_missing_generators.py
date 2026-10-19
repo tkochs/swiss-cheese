@@ -51,6 +51,8 @@ def data(kind: str = "MCAR"):
             raise ValueError(f"No dataframe for this type: {kind}")
 
 
+################################################## ALL #########################################################
+
 class TestGeneralProperties:
     @pytest.mark.parametrize("generator", ALL_GENERATORS, ids=repr)
     @pytest.mark.parametrize("alpha", [0.0, 0.1, 0.15, 0.2, 0.4, 0.5])
@@ -101,20 +103,12 @@ class TestGeneralProperties:
         mm2 = g(df, 0.2).isna()
         assert mm1.equals(mm2), f"MV generator {generator.__name__} produced non-deterministic values"
 
+################################################## MCAR #########################################################
 
 def test_mcar_error():
     with pytest.warns(UserWarning):
         df = data()
         missing = MCAR()(df, 0.9)
-    n_miss = missing.isna().sum().sum()
-    print(missing)
-    print(n_miss)
-    assert n_miss == df.size * 0.8
-
-def test_mnar_warn():
-    with pytest.warns(UserWarning):
-        df = data()
-        missing = MNAR(max_missing_per_column=1.0)(df, 1.0)
     n_miss = missing.isna().sum().sum()
     print(missing)
     print(n_miss)
@@ -126,11 +120,30 @@ def test_mcar_allowed():
     assert not missing.isna().iloc[:, 1:].any().any(), "missing values in not allowed column"
     assert missing.isna().iloc[:, 0].any().any(), "no missing values allowed column"
 
+@pytest.mark.parametrize("n", [1, 2, 3, 4])
+def test_mcar_n_allowed(n):
+    df = data()
+    # more missing values than fit into n-1 columns, so all n columns must be hit
+    missing_rate = (n - 0.5) / df.shape[1]
+    missing = MCAR(n_features=df.shape[1], allowed_features=n)(df, missing_rate)
+    n_missing_cols = missing.isna().any(axis=0).sum()
+    assert n_missing_cols == n, f"Expected {n} columns with missing values, actual: {n_missing_cols}"
+
 def test_max_percentage():
     p = max_missing_percentage(data())
     print(p)
     assert np.isclose(p, 1 - 10 / 50)
 
+##################################### MAR #################################################
+
+def test_mnar_warn():
+    with pytest.warns(UserWarning):
+        df = data()
+        missing = MNAR(max_missing_per_column=1.0)(df, 1.0)
+    n_miss = missing.isna().sum().sum()
+    print(missing)
+    print(n_miss)
+    assert n_miss == df.size * 0.8
 
 def test_mnar_min():
     df = data("MNAR")
@@ -227,6 +240,7 @@ def test_gm():
     print(miss)
     assert (old > miss).all(), "old quantile should be larger"
 
+##################################### MAR #################################################
 
 def test_mar():
     df = data()

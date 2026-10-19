@@ -20,7 +20,7 @@ class MCAR:
         if isinstance(allowed_features, int):
             if n_features is None:
                 raise ValueError(f"In order to drop random features provide a 'n_features' value, that gives an upper limit")
-            self.allowed_features = rng.integers(low=0, high=n_features, size=allowed_features)
+            self.allowed_features = self.rng.choice(np.arange(n_features),allowed_features, replace=False)
         else:
             self.allowed_features = allowed_features
 
